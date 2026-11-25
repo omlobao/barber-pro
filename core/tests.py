@@ -52,3 +52,23 @@ class AuthAndPermissionsTests(TestCase):
         self.professional.save(update_fields=['is_active'])
         forbidden_resp = self.api.get(me_url)
         self.assertEqual(forbidden_resp.status_code, 403)
+
+    def test_api_docs_restricted_to_admin_only(self):
+        docs_url = reverse('swagger-ui')
+        schema_url = reverse('schema')
+
+        # 1. Visitante anônimo deve ser bloqueado (403)
+        anon_resp = self.api.get(docs_url)
+        self.assertIn(anon_resp.status_code, (401, 403))
+
+        # 2. Barbeiro comum (não-staff) deve ser bloqueado (403)
+        self.api.force_authenticate(user=self.barber_user)
+        barber_resp = self.api.get(docs_url)
+        self.assertEqual(barber_resp.status_code, 403)
+
+        # 3. Administrador (is_staff=True) tem acesso liberado (200)
+        self.api.force_authenticate(user=self.admin)
+        admin_docs = self.api.get(docs_url)
+        admin_schema = self.api.get(schema_url)
+        self.assertEqual(admin_docs.status_code, 200)
+        self.assertEqual(admin_schema.status_code, 200)
