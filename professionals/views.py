@@ -141,7 +141,7 @@ class AdminProfessionalViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        updated = professional.working_hours.all()
+        updated = WorkingHours.objects.filter(professional=professional)
         return Response(
             WorkingHoursSerializer(updated, many=True).data,
             status=status.HTTP_200_OK,

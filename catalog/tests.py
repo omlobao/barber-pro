@@ -1,3 +1,68 @@
-from django.test import TestCase
+from decimal import Decimal
 
-# Create your tests here.
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
+
+from .models import Product, Service
+
+
+class CatalogModelAndAPITests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username='admin_cat',
+            password='password123',
+            is_staff=True,
+        )
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.admin)
+
+    def test_service_slug_generation_and_effective_price(self):
+        s1 = Service.objects.create(
+            name='Corte Social',
+            price=Decimal('45.00'),
+            promotion_price=Decimal('35.00'),
+            duration_minutes=30,
+        )
+        s2 = Service.objects.create(
+            name='Corte Social',
+            price=Decimal('45.00'),
+            duration_minutes=30,
+        )
+        self.assertEqual(s1.slug, 'corte-social')
+        self.assertEqual(s2.slug, 'corte-social-1')
+        self.assertEqual(s1.effective_price, Decimal('35.00'))
+        self.assertEqual(s2.effective_price, Decimal('45.00'))
+
+    def test_invalid_promotion_price_raises_validation_error(self):
+        with self.assertRaises(ValidationError):
+            Service.objects.create(
+                name='Barba',
+                price=Decimal('30.00'),
+                promotion_price=Decimal('35.00'),
+                duration_minutes=20,
+            )
+
+    def test_product_sku_and_low_stock_filter_api(self):
+        p_low = Product.objects.create(
+            name='Shampoo Mentolado',
+            sale_price=Decimal('35.00'),
+            stock_quantity=1,
+            min_stock_alert=2,
+        )
+        Product.objects.create(
+            name='Óleo para Barba',
+            sale_price=Decimal('30.00'),
+            stock_quantity=10,
+            min_stock_alert=2,
+        )
+        self.assertTrue(bool(p_low.sku))
+
+        url = reverse('admin-products-list')
+        resp = self.api.get(url, {'is_low_stock': 'true'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['id'], str(p_low.id))
+        self.assertTrue(resp.data[0]['is_low_stock'])
