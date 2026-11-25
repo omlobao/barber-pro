@@ -29,7 +29,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
             'comission_rate': {'required': False},
         }
 
-    def get_item_name(self, obj):
+    def get_item_name(self, obj) -> str:
         if obj.service:
             return obj.service.name
         if obj.product:

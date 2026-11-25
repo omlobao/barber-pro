@@ -4,7 +4,14 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
-from rest_framework import status, viewsets
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -18,7 +25,53 @@ from .serializers import (
     OrderSerializer,
 )
 
+FINANCIAL_TAG = '7. Painel — Financeiro, Comandas (PDV) & Caixa'
 
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Listar comandas / vendas (PDV)',
+        description=(
+            'Retorna todas as comandas (abertas, pagas e canceladas) com '
+            'seus respectivos itens de serviço e produto.'
+        ),
+    ),
+    retrieve=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Consultar detalhes de uma comanda',
+        description=(
+            'Retorna uma comanda específica com subtotal, desconto, gorjeta, '
+            'total líquido e lista de itens consumidos.'
+        ),
+    ),
+    create=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Abrir nova comanda avulsa (Balcão)',
+        description=(
+            'Abre uma nova comanda no status `OPEN` (pode ser vinculada a '
+            'um cliente ou aberta como venda avulsa de balcão).'
+        ),
+    ),
+    update=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Atualizar comanda completa (PUT)',
+        description='Atualiza os dados gerais de uma comanda.',
+    ),
+    partial_update=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Atualizar comanda parcialmente (PATCH)',
+        description=(
+            'Permite atualizar observações, profissional responsável, '
+            'desconto ou gorjeta de uma comanda.'
+        ),
+    ),
+    destroy=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Excluir comanda',
+        description='Remove o registro de uma comanda do sistema.',
+    ),
+)
 class AdminOrderViewSet(viewsets.ModelViewSet):
     queryset = (
         Order.objects.select_related('client', 'professional')
@@ -27,9 +80,20 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [IsBarberShopStaff]
 
+    @extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Adicionar serviço extra ou produto na comanda aberta',
+        description=(
+            'Adiciona um item (`SERVICE` ou `PRODUCT`) à comanda aberta. '
+            'Preenche automaticamente o preço unitário e a taxa de comissão '
+            'do barbeiro caso não sejam informados e recalcula o total da '
+            'comanda.'
+        ),
+        request=OrderItemSerializer,
+        responses={201: OrderSerializer},
+    )
     @action(detail=True, methods=['post'], url_path='add-item')
     def add_item(self, request, pk=None):
-        """Adiciona um serviço extra ou produto na comanda aberta."""
         order = self.get_object()
         if order.status != Order.Status.OPEN:
             return Response(
@@ -47,6 +111,25 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Remover item de uma comanda aberta',
+        description=(
+            'Exclui um item específico (`item_id`) da comanda aberta e '
+            'recalcula automaticamente o `subtotal` e `total_amount`.'
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='item_id',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.PATH,
+                description=(
+                    'ID do item da comanda (OrderItem) a ser removido.'
+                ),
+            ),
+        ],
+        responses={200: OrderSerializer},
+    )
     @action(
         detail=True,
         methods=['delete'],
@@ -73,9 +156,24 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         order.recalculate_totals()
         return Response(OrderSerializer(order).data)
 
+    @extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Fechar e receber comanda (Liquidação PDV)',
+        description=(
+            'Executa o fechamento atômico da comanda:\n'
+            '1. Aplica `discount_total` e `tip` (gorjeta), se enviados.\n'
+            '2. Valida e desconta o estoque dos produtos vendidos.\n'
+            '3. Muda o status da comanda para `PAID`.\n'
+            '4. Conclui o agendamento vinculado (`COMPLETED`) e incrementa '
+            '`client.total_visits`.\n'
+            '5. Gera o registro de comissão do barbeiro (`ComissionRecord`).\n'
+            '6. Lança a entrada financeira no fluxo de caixa.'
+        ),
+        request=CloseOrderSerializer,
+        responses={200: OrderSerializer},
+    )
     @action(detail=True, methods=['post'], url_path='close')
     def close(self, request, pk=None):
-        """Fecha a comanda, baixa estoque, gera comissão e lança no caixa."""
         order = self.get_object()
         serializer = CloseOrderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -112,6 +210,22 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         )
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Listar registros de comissões de barbeiros',
+        description=(
+            'Lista as comissões geradas no fechamento de comandas. '
+            'Administradores visualizam todos os barbeiros; profissionais '
+            'visualizam apenas as próprias comissões.'
+        ),
+    ),
+    retrieve=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Consultar detalhes de um registro de comissão',
+        description='Retorna os dados de uma comissão específica pelo UUID.',
+    ),
+)
 class AdminCommissionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ComissionRecord.objects.select_related(
         'professional',
@@ -131,9 +245,20 @@ class AdminCommissionViewSet(viewsets.ReadOnlyModelViewSet):
             )
         return qs
 
+    @extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Confirmar pagamento/repasse de comissão ao barbeiro',
+        description=(
+            'Restrito ao administrador (`is_staff`). Marca a comissão '
+            'pendente como `PAID`, preenche `paid_at` e lança '
+            'automaticamente uma saída (`EXPENSE` / `COMISSION_PAYOUT`) no '
+            'fluxo de caixa da barbearia.'
+        ),
+        request=None,
+        responses={200: ComissionRecordSerializer},
+    )
     @action(detail=True, methods=['post'], url_path='mark-paid')
     def mark_paid(self, request, pk=None):
-        """Dono marca a comissão como repassada e registra saída no caixa."""
         if not request.user.is_staff:
             return Response(
                 {'detail': 'Apenas o administrador pode confirmar repasses.'},
@@ -165,6 +290,76 @@ class AdminCommissionViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(ComissionRecordSerializer(record).data)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Listar movimentações do fluxo de caixa',
+        description=(
+            'Lista todas as entradas (`INCOME`) e saídas (`EXPENSE`) do '
+            'caixa, permitindo filtrar por período (`start_date` e '
+            '`end_date`), tipo e categoria.'
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='start_date',
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                description='Data inicial (YYYY-MM-DD).',
+            ),
+            OpenApiParameter(
+                name='end_date',
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                description='Data final (YYYY-MM-DD).',
+            ),
+            OpenApiParameter(
+                name='transaction_type',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description=(
+                    'Filtra por INCOME (Receita) ou EXPENSE (Despesa).'
+                ),
+            ),
+            OpenApiParameter(
+                name='category',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description=(
+                    'Filtra por categoria (ORDER_PAYMENT, COMISSION_PAYOUT, '
+                    'STOCK_PURCHASE, FIXED_EXPENSE, OTHER).'
+                ),
+            ),
+        ],
+    ),
+    retrieve=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Consultar detalhes de um lançamento de caixa',
+        description='Retorna os dados de uma transação financeira pelo UUID.',
+    ),
+    create=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Registrar lançamento manual no caixa (Despesa ou Receita)',
+        description=(
+            'Permite ao administrador lançar despesas fixas (aluguel, luz, '
+            'internet), compras de insumos ou entradas avulsas no caixa.'
+        ),
+    ),
+    update=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Atualizar lançamento de caixa (PUT)',
+        description='Atualiza todos os campos de uma transação do caixa.',
+    ),
+    partial_update=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Atualizar lançamento de caixa parcialmente (PATCH)',
+        description='Altera descrição, valor, categoria ou data.',
+    ),
+    destroy=extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Excluir lançamento de caixa',
+        description='Remove um lançamento financeiro (restrito a `is_staff`).',
+    ),
+)
 class AdminCashFlowViewSet(viewsets.ModelViewSet):
     queryset = CashFlowTransaction.objects.all()
     serializer_class = CashFlowTransactionSerializer
@@ -188,13 +383,59 @@ class AdminCashFlowViewSet(viewsets.ModelViewSet):
 
         return qs
 
+    @extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Obter resumo financeiro consolidado (Dashboard)',
+        description=(
+            'Retorna os indicadores financeiros agregados do período: total '
+            'de receitas (`total_income`), total de despesas '
+            '(`total_expense`), saldo líquido (`net_balance`), total de '
+            'comissões pendentes de repasse (`pending_commissions`) e '
+            'quantidade de comandas pagas (`paid_orders_count`).'
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='start_date',
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                description='Data inicial do período (YYYY-MM-DD).',
+            ),
+            OpenApiParameter(
+                name='end_date',
+                type=OpenApiTypes.DATE,
+                location=OpenApiParameter.QUERY,
+                description='Data final do período (YYYY-MM-DD).',
+            ),
+        ],
+        responses={
+            200: inline_serializer(
+                name='CashFlowSummaryResponse',
+                fields={
+                    'start_date': serializers.DateField(allow_null=True),
+                    'end_date': serializers.DateField(allow_null=True),
+                    'total_income': serializers.DecimalField(
+                        max_digits=12,
+                        decimal_places=2,
+                    ),
+                    'total_expense': serializers.DecimalField(
+                        max_digits=12,
+                        decimal_places=2,
+                    ),
+                    'net_balance': serializers.DecimalField(
+                        max_digits=12,
+                        decimal_places=2,
+                    ),
+                    'pending_commissions': serializers.DecimalField(
+                        max_digits=12,
+                        decimal_places=2,
+                    ),
+                    'paid_orders_count': serializers.IntegerField(),
+                },
+            )
+        },
+    )
     @action(detail=False, methods=['get'], url_path='summary')
     def summary(self, request):
-        """
-        Retorna o resumo financeiro consolidado para o dashboard
-        (entradas, saídas, saldo líquido e comissões pendentes).
-        GET /api/admin/cashflow/summary/?start_date=YYYY-MM-DD&end_date=...
-        """
         qs = self.get_queryset()
         zero = Decimal('0.00')
 

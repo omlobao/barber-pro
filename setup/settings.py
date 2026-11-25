@@ -159,9 +159,73 @@ SIMPLE_JWT = {
 SPECTACULAR_SETTINGS = {
     'TITLE': 'BarberPro API',
     'DESCRIPTION': (
-        'API RESTful de gestão operacional, agendamento atômico e PDV '
-        'financeiro para barbearias.'
+        'Documentação técnica interativa da API RESTful do **BarberPro**.\n\n'
+        '### Perfis de Acesso:\n'
+        '* **Rotas Públicas (`/api/public/`)**: Abertas (`AllowAny`) para a '
+        'vitrine da barbearia e agendamento online pelo cliente.\n'
+        '* **Rotas do Painel (`/api/admin/`)**: Protegidas por token JWT '
+        '(`Bearer <access_token>`). Acessíveis por administradores '
+        '(`is_staff`) e barbeiros ativos.'
     ),
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'TAGS': [
+        {
+            'name': '1. Autenticação & Sessão',
+            'description': (
+                'Emissão e renovação de tokens JWT e identificação do '
+                'usuário/barbeiro logado.'
+            ),
+        },
+        {
+            'name': '2. Vitrine & Agendamento Público',
+            'description': (
+                'Endpoints públicos consumidos pelo cliente final para '
+                'consultar serviços, barbeiros, horários livres, agendar e '
+                'cancelar via token.'
+            ),
+        },
+        {
+            'name': '3. Painel — Catálogo (Serviços e Produtos)',
+            'description': (
+                'Gestão interna do catálogo de cortes/serviços, preços '
+                'promocionais e estoque de produtos.'
+            ),
+        },
+        {
+            'name': '4. Painel — Clientes (CRM)',
+            'description': (
+                'Cadastro de clientes, busca por WhatsApp, histórico de '
+                'visitas/faltas e bloqueio preventivo.'
+            ),
+        },
+        {
+            'name': '5. Painel — Profissionais & Expediente',
+            'description': (
+                'Gestão de barbeiros, comissões, grade semanal de trabalho '
+                'e exceções/feriados.'
+            ),
+        },
+        {
+            'name': '6. Painel — Agenda & Atendimentos',
+            'description': (
+                'Gerenciamento da agenda diária, abertura de comanda a '
+                'partir do agendamento e registro de faltas (no-show).'
+            ),
+        },
+        {
+            'name': '7. Painel — Financeiro, Comandas (PDV) & Caixa',
+            'description': (
+                'Operação de caixa: comandas, adição/remoção de itens, '
+                'fechamento com baixa de estoque, repasse de comissões e '
+                'resumo financeiro.'
+            ),
+        },
+    ],
+    'ENUM_NAME_OVERRIDES': {
+        'AppointmentStatusEnum': 'scheduling.models.Appointment.Status',
+        'OrderStatusEnum': 'financial.models.Order.Status',
+        'ComissionStatusEnum': 'financial.models.ComissionRecord.Status',
+    },
 }

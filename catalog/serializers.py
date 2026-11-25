@@ -48,5 +48,5 @@ class ProductSerializer(serializers.ModelSerializer):
             'is_active',
         ]
 
-    def get_is_low_stock(self, obj):
+    def get_is_low_stock(self, obj) -> bool:
         return obj.stock_quantity <= obj.min_stock_alert

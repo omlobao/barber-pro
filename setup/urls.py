@@ -8,10 +8,6 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
 
 from catalog.views import (
     AdminProductViewSet,
@@ -19,7 +15,7 @@ from catalog.views import (
     PublicServiceViewSet,
 )
 from clients.views import AdminClientViewSet
-from core.views import CurrentUserView
+from core.views import AuthLoginView, AuthRefreshView, CurrentUserView
 from financial.views import (
     AdminCashFlowViewSet,
     AdminCommissionViewSet,
@@ -118,12 +114,12 @@ urlpatterns = [
     # Autenticação JWT
     path(
         'api/auth/login/',
-        TokenObtainPairView.as_view(),
+        AuthLoginView.as_view(),
         name='auth-login',
     ),
     path(
         'api/auth/refresh/',
-        TokenRefreshView.as_view(),
+        AuthRefreshView.as_view(),
         name='auth-refresh',
     ),
     path(
