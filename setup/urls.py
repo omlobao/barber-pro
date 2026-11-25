@@ -1,22 +1,148 @@
-"""
-URL configuration for setup project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.0/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+
+from catalog.views import (
+    AdminProductViewSet,
+    AdminServiceViewSet,
+    PublicServiceViewSet,
+)
+from clients.views import AdminClientViewSet
+from core.views import CurrentUserView
+from financial.views import (
+    AdminCashFlowViewSet,
+    AdminCommissionViewSet,
+    AdminOrderViewSet,
+)
+from professionals.views import (
+    AdminProfessionalViewSet,
+    AdminScheduleExceptionViewSet,
+    PublicProfessionalViewSet,
+)
+from scheduling.views import (
+    AdminAppointmentViewSet,
+    PublicAppointmentCancelView,
+    PublicAppointmentManageView,
+    PublicAvailabilityView,
+    PublicBookingCreateView,
+)
+
+# Rotas Públicas (Landing Page + Wizard de Agendamento)
+public_router = DefaultRouter()
+public_router.register(
+    r'services',
+    PublicServiceViewSet,
+    basename='public-services',
+)
+public_router.register(
+    r'professionals',
+    PublicProfessionalViewSet,
+    basename='public-professionals',
+)
+
+# Rotas Privadas (Painel do Barbeiro e Administrador)
+admin_router = DefaultRouter()
+admin_router.register(
+    r'services',
+    AdminServiceViewSet,
+    basename='admin-services',
+)
+admin_router.register(
+    r'products',
+    AdminProductViewSet,
+    basename='admin-products',
+)
+admin_router.register(
+    r'clients',
+    AdminClientViewSet,
+    basename='admin-clients',
+)
+admin_router.register(
+    r'professionals',
+    AdminProfessionalViewSet,
+    basename='admin-professionals',
+)
+admin_router.register(
+    r'schedule-exceptions',
+    AdminScheduleExceptionViewSet,
+    basename='admin-exceptions',
+)
+admin_router.register(
+    r'appointments',
+    AdminAppointmentViewSet,
+    basename='admin-appointments',
+)
+admin_router.register(
+    r'orders',
+    AdminOrderViewSet,
+    basename='admin-orders',
+)
+admin_router.register(
+    r'commissions',
+    AdminCommissionViewSet,
+    basename='admin-commissions',
+)
+admin_router.register(
+    r'cashflow',
+    AdminCashFlowViewSet,
+    basename='admin-cashflow',
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # Autenticação JWT
+    path(
+        'api/auth/login/',
+        TokenObtainPairView.as_view(),
+        name='auth-login',
+    ),
+    path(
+        'api/auth/refresh/',
+        TokenRefreshView.as_view(),
+        name='auth-refresh',
+    ),
+    path(
+        'api/auth/me/',
+        CurrentUserView.as_view(),
+        name='auth-me',
+    ),
+
+    # API Pública
+    path('api/public/', include(public_router.urls)),
+    path(
+        'api/public/availability/',
+        PublicAvailabilityView.as_view(),
+        name='public-availability',
+    ),
+    path(
+        'api/public/bookings/',
+        PublicBookingCreateView.as_view(),
+        name='public-booking-create',
+    ),
+    path(
+        'api/public/bookings/<uuid:cancel_token>/',
+        PublicAppointmentManageView.as_view(),
+        name='public-booking-detail',
+    ),
+    path(
+        'api/public/bookings/<uuid:cancel_token>/cancel/',
+        PublicAppointmentCancelView.as_view(),
+        name='public-booking-cancel',
+    ),
+
+    # API Painel
+    path('api/admin/', include(admin_router.urls)),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL,
+        document_root=settings.MEDIA_ROOT,
+    )

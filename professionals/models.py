@@ -15,6 +15,7 @@ class Professional(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        related_name='professional_profile',
     )
     display_name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)

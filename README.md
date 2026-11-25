@@ -175,21 +175,53 @@ Integração nativa com a biblioteca internacional `holidays` especializada na l
 
 ---
 
-## 📐 8. Conformidade & Qualidade de Código (PEP 8)
+## 🔐 8. Especificação da API RESTful, RBAC & Autenticação JWT
 
-* **Controle Estrito de Linhas**: 100% dos arquivos formatados dentro do limite de **79 caracteres** por linha.
-* **Tipagem Estática**: Type hints aplicados em funções críticas (`time`, `date`, `Decimal`, `list[str]`).
-* **Imports Estruturados**: Tripartição padrão PEP 8 (*Standard Library*, *Third-Party*, *Local Modules*).
+A camada HTTP é segregada em três superfícies de acesso com controle de permissões baseado em papéis (*Role-Based Access Control* via `IsBarberShopStaff` e `IsOwnerOrReadOnly`):
+
+### 8.1 Autenticação & Sessão (`/api/auth/`)
+| Método | Endpoint | Permissão | Descrição |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/login/` | `AllowAny` | Emite par de tokens JWT (`access` de 8h + `refresh` de 7d com rotação). |
+| `POST` | `/api/auth/refresh/` | `AllowAny` | Renova o token de acesso via `refresh` token. |
+| `GET` | `/api/auth/me/` | `IsBarberShopStaff` | Retorna contexto do usuário, papel (`ADMIN` ou `PROFESSIONAL`) e perfil vinculado. |
+
+### 8.2 Superfície Pública — Vitrine & Self-Booking (`/api/public/`)
+| Método | Endpoint | Descrição |
+| :--- | :--- | :--- |
+| `GET` | `/api/public/services/` | Catálogo de serviços ativos com `effective_price` calculado. |
+| `GET` | `/api/public/professionals/` | Lista de barbeiros ativos e serviços habilitados. |
+| `GET` | `/api/public/availability/` | Cálculo dinâmico de slots (`?date=YYYY-MM-DD&service_ids=u1,u2&professional_id=u3`). |
+| `POST` | `/api/public/bookings/` | Criação atômica de agendamento com `select_for_update()`. |
+| `GET` | `/api/public/bookings/<cancel_token>/` | Consulta pública segura via token criptográfico anti-IDOR. |
+| `POST` | `/api/public/bookings/<cancel_token>/cancel/` | Cancelamento autônomo pelo cliente (se `PENDING` ou `CONFIRMED`). |
+
+### 8.3 Superfície Administrativa & Operacional (`/api/admin/`)
+| Recurso | Endpoint Base | Actions Customizadas & Regras de Escopo |
+| :--- | :--- | :--- |
+| **Serviços** | `/api/admin/services/` | CRUD completo (escrita restrita a `is_staff`, leitura liberada à equipe). |
+| **Produtos** | `/api/admin/products/` | CRUD + filtro `?is_low_stock=true` via expressão `F('min_stock_alert')`. |
+| **Clientes** | `/api/admin/clients/` | Busca unificada `?search=`, filtro `?is_blocked=` e `POST /{id}/toggle-block/`. |
+| **Profissionais** | `/api/admin/professionals/` | CRUD + `PUT /{id}/working-hours/` para atualização atômica da grade semanal. |
+| **Exceções** | `/api/admin/schedule-exceptions/` | Gestão de folgas, férias, feriados e turnos extras. |
+| **Agendamentos** | `/api/admin/appointments/` | Isolamento de agenda por barbeiro, `POST /{id}/open-order/` e `POST /{id}/mark-no-show/`. |
+| **Comandas (PDV)** | `/api/admin/orders/` | `POST /{id}/add-item/`, `DELETE /{id}/remove-item/{item_id}/` e `POST /{id}/close/`. |
+| **Comissões** | `/api/admin/commissions/` | Extrato por profissional + `POST /{id}/mark-paid/` (gera saída no caixa). |
+| **Fluxo de Caixa** | `/api/admin/cashflow/` | Filtros por período/tipo/categoria + `GET /summary/` para indicadores de dashboard. |
 
 ---
 
-## 🚀 9. Guia de Inicialização Técnica
+## 🧪 9. Qualidade de Código (PEP 8) & Testes Automatizados
 
-### Pré-requisitos
-* Python 3.12+ (testado em Python 3.14)
-* Git
-* Virtualenv
+* **Controle Estrito de Linhas**: 100% dos arquivos formatados dentro do limite de **79 caracteres** por linha (`0` violações).
+* **Tipagem Estática**: Type hints aplicados em funções críticas (`time`, `date`, `Decimal`, `list[str]`).
+* **Suíte de Testes (`manage.py test`)**: Cobertura automatizada de cálculo de slots, bloqueio de feriados, prevenção de *double-booking*, trava de clientes bloqueados, contabilização de `no-show`, baixa de estoque, cálculo de comissão com gorjeta e consolidação de fluxo de caixa.
 
+---
+
+## 🚀 10. Guia de Inicialização Técnica & Docker
+
+### Execução Local (Virtualenv)
 ```bash
 # 1. Clonagem e Isolamento
 git clone https://github.com/omlobao/barber-pro.git
@@ -197,20 +229,23 @@ cd barber-pro
 python3 -m venv venv
 source venv/bin/activate
 
-# 2. Resolução de Dependências
+# 2. Resolução de Dependências e Migrações
 pip install -r requirements.txt
-
-# 3. Execução da Camada de Migrações
 python manage.py migrate
 
-# 4. Verificação de Integridade dos Modelos e Admin
+# 3. Execução da Suíte de Testes e Verificação de Integridade
 python manage.py check
+python manage.py test
 
-# 5. Provisionamento do Administrador do Sistema
+# 4. Inicialização do Servidor
 python manage.py createsuperuser
-
-# 6. Inicialização do Daemon HTTP
 python manage.py runserver
+```
+
+### Execução via Docker
+```bash
+docker build -t barber-pro -f dockerfile .
+docker run -p 9000:9000 barber-pro
 ```
 
 ---

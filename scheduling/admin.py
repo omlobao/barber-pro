@@ -83,7 +83,16 @@ class AppointmentAdmin(admin.ModelAdmin):
 
     @admin.action(description='Marcar selecionados como Não Compareceu')
     def mark_as_no_show(self, request, queryset):
-        queryset.update(status=Appointment.Status.NO_SHOW)
+        eligible = list(
+            queryset.exclude(status=Appointment.Status.NO_SHOW)
+            .select_related('client')
+        )
+        for appointment in eligible:
+            appointment.status = Appointment.Status.NO_SHOW
+            appointment.save(update_fields=['status', 'updated_at'])
+            client = appointment.client
+            client.no_show_count += 1
+            client.save(update_fields=['no_show_count', 'updated_at'])
 
 
 @admin.register(AppointmentItem)
