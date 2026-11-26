@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'clients',
     'scheduling',
     'financial',
+    'whatsapp',
 ]
 
 MIDDLEWARE = [
@@ -243,6 +244,14 @@ SPECTACULAR_SETTINGS = {
                 'resumo financeiro.'
             ),
         },
+        {
+            'name': '8. Painel — WhatsApp CRM & Automação',
+            'description': (
+                'Central de Conversas, fila de atendimento humano, funil de '
+                'leads, campanhas promocionais com opt-in, Evolution GO '
+                '(QR Code) e simulador local do bot da barbearia.'
+            ),
+        },
     ],
     'ENUM_NAME_OVERRIDES': {
         'AppointmentStatusEnum': 'scheduling.models.Appointment.Status',
@@ -250,3 +259,18 @@ SPECTACULAR_SETTINGS = {
         'ComissionStatusEnum': 'financial.models.ComissionRecord.Status',
     },
 }
+
+# Integração Evolution GO / Evolution API (WhatsApp CRM)
+EVOLUTION_PROVIDER = os.environ.get('EVOLUTION_PROVIDER', 'evolution_go')
+EVOLUTION_API_URL = os.environ.get('EVOLUTION_API_URL', '')
+EVOLUTION_API_KEY = os.environ.get('EVOLUTION_API_KEY', '')
+EVOLUTION_INSTANCE_NAME = os.environ.get(
+    'EVOLUTION_INSTANCE_NAME',
+    'barberpro',
+)
+EVOLUTION_WEBHOOK_TOKEN = os.environ.get('EVOLUTION_WEBHOOK_TOKEN', '')
+EVOLUTION_TIMEOUT = int(os.environ.get('EVOLUTION_TIMEOUT', '8'))
+PUBLIC_BOOKING_URL = os.environ.get(
+    'PUBLIC_BOOKING_URL',
+    'http://localhost:5173/agendar',
+)

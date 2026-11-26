@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Ban,
   CheckCircle2,
   Edit3,
+  MessageCircle,
   Plus,
   Search,
   UserCheck,
@@ -239,6 +241,16 @@ export default function AdminClientsPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <Link
+                  to={`/admin/whatsapp?phone=${encodeURIComponent(
+                    c.phone_number
+                  )}&name=${encodeURIComponent(c.name)}`}
+                  className="inline-flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#D97706]/40 bg-[#D97706]/10 px-3 text-xs font-bold text-[#F59E0B] hover:bg-[#D97706]/20"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  WhatsApp
+                </Link>
+
                 <button
                   type="button"
                   onClick={() => openEditModal(c)}

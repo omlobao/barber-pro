@@ -42,6 +42,7 @@ from scheduling.views import (
     PublicAvailabilityView,
     PublicBookingCreateView,
 )
+from whatsapp.views import whatsapp_webhook
 
 # Rotas Públicas (Landing Page + Wizard de Agendamento)
 public_router = DefaultRouter()
@@ -197,7 +198,15 @@ urlpatterns = [
         name='public-booking-cancel',
     ),
 
+    # Webhook Público Evolution GO / WhatsApp
+    path(
+        'webhook/whatsapp/<str:token>/',
+        whatsapp_webhook,
+        name='whatsapp-webhook',
+    ),
+
     # API Painel
+    path('api/admin/whatsapp/', include('whatsapp.urls')),
     path('api/admin/', include(admin_router.urls)),
 ]
 

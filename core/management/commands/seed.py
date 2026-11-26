@@ -15,6 +15,8 @@ from professionals.models import (
     WorkingHours,
 )
 from scheduling.models import Appointment, AppointmentItem
+from whatsapp.bot import process_whatsapp_message, upsert_crm_lead
+from whatsapp.models import CRMLead, WhatsAppCampaign, WhatsAppSettings
 
 
 class Command(BaseCommand):
@@ -471,6 +473,44 @@ class Command(BaseCommand):
                 price=degrade.effective_price,
                 duration_minutes=degrade.duration_minutes,
             )
+
+        # 8. WhatsApp CRM (Conversas, Funil de Leads e Campanha Demo)
+        WhatsAppSettings.get_solo()
+        process_whatsapp_message(
+            '5511988002233',
+            '3',
+            push_name='Bruno Henrique',
+            message_id='seed-msg-bruno-1',
+            simulate_buffer=[],
+        )
+        process_whatsapp_message(
+            '5511988003344',
+            '1',
+            push_name='Felipe Santos',
+            message_id='seed-msg-felipe-1',
+            simulate_buffer=[],
+        )
+        upsert_crm_lead(
+            '5511977776655',
+            name='Thiago Mendes',
+            message='Quanto custa o Combo VIP com toalha quente?',
+            interest='Combo VIP (Corte + Barba + Sobrancelha)',
+            force_stage=CRMLead.Stage.INTERESTED,
+        )
+        vip_coupon = Coupon.objects.filter(code='BEMVINDO15').first()
+        WhatsAppCampaign.objects.get_or_create(
+            title='Quarta da Barboterapia — Convite VIP',
+            defaults={
+                'audience': WhatsAppCampaign.Audience.ALL_OPT_IN,
+                'coupon': vip_coupon,
+                'message': (
+                    'Fala, {nome}! 💈 Nesta semana liberamos o cupom '
+                    '*{cupom}* para você dar aquele trato no visual na '
+                    'BarberPro Studio. Garanta sua cadeira: {link}'
+                ),
+                'created_by': admin_user,
+            },
+        )
 
         self.stdout.write(
             self.style.SUCCESS(

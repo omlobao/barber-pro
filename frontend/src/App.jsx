@@ -19,6 +19,7 @@ const AdminCatalogPage = lazy(() => import('@/pages/admin/AdminCatalogPage'));
 const AdminCouponsPage = lazy(() => import('@/pages/admin/AdminCouponsPage'));
 const AdminTeamPage = lazy(() => import('@/pages/admin/AdminTeamPage'));
 const AdminClientsPage = lazy(() => import('@/pages/admin/AdminClientsPage'));
+const AdminWhatsAppPage = lazy(() => import('@/pages/admin/AdminWhatsAppPage'));
 
 function RouteFallback() {
   return (
@@ -64,6 +65,7 @@ export default function App() {
                 <Route path="cupons" element={<AdminCouponsPage />} />
                 <Route path="equipe" element={<AdminTeamPage />} />
                 <Route path="clientes" element={<AdminClientsPage />} />
+                <Route path="whatsapp" element={<AdminWhatsAppPage />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />

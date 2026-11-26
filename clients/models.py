@@ -60,6 +60,18 @@ class Client(models.Model):
             "recorrentes com faltas"
         ),
     )
+    whatsapp_opt_in = models.BooleanField(
+        default=True,
+        verbose_name="Aceita Promoções no WhatsApp",
+        help_text=(
+            "Desmarcado automaticamente quando o cliente envia SAIR ou PARAR."
+        ),
+    )
+    whatsapp_opt_out_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Cancelou Promoções em",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

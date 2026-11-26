@@ -5,6 +5,7 @@ import {
   ExternalLink,
   LogOut,
   Menu,
+  MessageCircle,
   Package,
   Receipt,
   Scissors,
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { to: '/admin/cupons', label: 'Cupons & Promoções', icon: Ticket },
   { to: '/admin/equipe', label: 'Equipe & Horários', icon: UserCog },
   { to: '/admin/clientes', label: 'Clientes (CRM)', icon: Users },
+  { to: '/admin/whatsapp', label: 'WhatsApp CRM', icon: MessageCircle },
 ];
 
 function SidebarContent({ onNavigate }) {
