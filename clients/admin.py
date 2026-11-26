@@ -24,6 +24,7 @@ class ClientAdmin(admin.ModelAdmin):
             {
                 'fields': (
                     'id',
+                    'user',
                     'name',
                     'phone_number',
                     'email',

@@ -1,3 +1,4 @@
+from decimal import Decimal
 import uuid
 
 from django.core.exceptions import ValidationError
@@ -47,10 +48,27 @@ class Appointment(models.Model):
         db_index=True,
     )
     total_duration_minutes = models.PositiveSmallIntegerField(default=30)
+    coupon = models.ForeignKey(
+        'catalog.Coupon',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='appointments',
+    )
+    subtotal_price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+    )
+    discount_amount = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+    )
     total_price = models.DecimalField(
         max_digits=8,
         decimal_places=2,
-        default=0.00,
+        default=Decimal('0.00'),
     )
     client_notes = models.CharField(
         max_length=255,

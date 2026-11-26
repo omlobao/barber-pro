@@ -9,8 +9,12 @@ from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 
 from core.permissions import IsBarberShopStaff, IsOwnerOrReadOnly
-from .models import Product, Service
-from .serializers import ProductSerializer, ServiceSerializer
+from .models import Coupon, Product, Service
+from .serializers import (
+    CouponSerializer,
+    ProductSerializer,
+    ServiceSerializer,
+)
 
 PUBLIC_TAG = '2. Vitrine & Agendamento Público'
 CATALOG_TAG = '3. Painel — Catálogo (Serviços e Produtos)'
@@ -159,3 +163,50 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('is_low_stock') == 'true':
             qs = qs.filter(stock_quantity__lte=models.F('min_stock_alert'))
         return qs
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=[CATALOG_TAG],
+        summary='Listar cupons de desconto e promoções',
+        description=(
+            'Retorna todos os cupons criados pelo dono da barbearia, '
+            'incluindo contador de usos (`used_count`) e regras de validade.'
+        ),
+    ),
+    retrieve=extend_schema(
+        tags=[CATALOG_TAG],
+        summary='Consultar detalhes de um cupom',
+        description='Retorna os dados completos de um cupom pelo UUID.',
+    ),
+    create=extend_schema(
+        tags=[CATALOG_TAG],
+        summary='Criar novo cupom promocional (Dono)',
+        description=(
+            'Permite ao administrador criar cupons percentuais (`PERCENTAGE`) '
+            'ou de valor fixo (`FIXED`), com valor mínimo, validade, limite '
+            'de usos e opção de 1ª visita.'
+        ),
+    ),
+    update=extend_schema(
+        tags=[CATALOG_TAG],
+        summary='Atualizar cupom completo (PUT)',
+        description='Atualiza todos os parâmetros de um cupom existente.',
+    ),
+    partial_update=extend_schema(
+        tags=[CATALOG_TAG],
+        summary='Ativar/desativar ou editar cupom (PATCH)',
+        description='Altera status `is_active`, validade ou limites do cupom.',
+    ),
+    destroy=extend_schema(
+        tags=[CATALOG_TAG],
+        summary='Excluir cupom de desconto',
+        description='Remove um cupom promocional do sistema.',
+    ),
+)
+class AdminCouponViewSet(viewsets.ModelViewSet):
+    """CRUD administrativo de cupons promocionais (controle do dono)."""
+
+    queryset = Coupon.objects.all()
+    serializer_class = CouponSerializer
+    permission_classes = [IsBarberShopStaff, IsOwnerOrReadOnly]

@@ -6,7 +6,8 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from .models import Product, Service
+from clients.models import Client
+from .models import Coupon, Product, Service
 
 
 class CatalogModelAndAPITests(TestCase):
@@ -66,3 +67,43 @@ class CatalogModelAndAPITests(TestCase):
         self.assertEqual(len(resp.data), 1)
         self.assertEqual(resp.data[0]['id'], str(p_low.id))
         self.assertTrue(resp.data[0]['is_low_stock'])
+
+    def test_admin_coupon_crud_and_first_visit_rule(self):
+        url = reverse('admin-coupons-list')
+        resp = self.api.post(
+            url,
+            {
+                'code': 'vip 15',
+                'description': '15% na primeira visita',
+                'discount_type': Coupon.DiscountType.PERCENTAGE,
+                'discount_value': '15.00',
+                'min_order_amount': '40.00',
+                'only_first_visit': True,
+                'is_active': True,
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['code'], 'VIP15')
+
+        coupon = Coupon.objects.get(code='VIP15')
+        new_client = Client.objects.create(
+            name='Cliente Novo',
+            phone_number='11912345678',
+            total_visits=0,
+        )
+        self.assertEqual(
+            coupon.calculate_discount(Decimal('100.00'), client=new_client),
+            Decimal('15.00'),
+        )
+
+        returning_client = Client.objects.create(
+            name='Cliente Antigo',
+            phone_number='11987651234',
+            total_visits=2,
+        )
+        with self.assertRaises(ValidationError):
+            coupon.calculate_discount(
+                Decimal('100.00'),
+                client=returning_client,
+            )

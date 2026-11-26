@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Product, Service
+from .models import Coupon, Product, Service
 
 
 @admin.register(Service)
@@ -107,3 +107,22 @@ class ProductAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description='Estoque Baixo')
     def is_low_stock(self, obj):
         return obj.stock_quantity <= obj.min_stock_alert
+
+
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+    list_display = (
+        'code',
+        'discount_type',
+        'discount_value',
+        'min_order_amount',
+        'used_count',
+        'max_uses',
+        'valid_until',
+        'only_first_visit',
+        'is_active',
+    )
+    list_editable = ('is_active',)
+    list_filter = ('discount_type', 'only_first_visit', 'is_active')
+    search_fields = ('code', 'description')
+    readonly_fields = ('id', 'used_count', 'created_at', 'updated_at')

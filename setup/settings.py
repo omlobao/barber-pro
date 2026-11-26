@@ -192,6 +192,13 @@ SPECTACULAR_SETTINGS = {
             ),
         },
         {
+            'name': '2.1 Área do Cliente (Conta & Cupons)',
+            'description': (
+                'Cadastro e login do cliente final, perfil, histórico de '
+                'agendamentos e validação de cupons promocionais.'
+            ),
+        },
+        {
             'name': '3. Painel — Catálogo (Serviços e Produtos)',
             'description': (
                 'Gestão interna do catálogo de cortes/serviços, preços '

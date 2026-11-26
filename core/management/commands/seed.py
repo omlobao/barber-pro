@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from catalog.models import Product, Service
+from catalog.models import Coupon, Product, Service
 from clients.models import Client
 from financial.models import Order, OrderItem
 from professionals.models import (
@@ -326,6 +326,78 @@ class Command(BaseCommand):
             )
             clients[phone] = client
 
+        # Contas online de demonstração para clientes (senha: cliente123)
+        demo_accounts = [
+            ('11988001122', 'Gabriel', 'gabriel.almeida@email.com'),
+            ('11988003344', 'Felipe', 'felipe.santos@email.com'),
+        ]
+        for phone, first_name, email in demo_accounts:
+            c_user, u_created = User.objects.get_or_create(
+                username=f'cli_{phone}',
+                defaults={
+                    'first_name': first_name,
+                    'email': email,
+                    'is_staff': False,
+                },
+            )
+            if u_created:
+                c_user.set_password('cliente123')
+                c_user.save()
+            client_obj = clients[phone]
+            if client_obj.user_id != c_user.id:
+                client_obj.user = c_user
+                client_obj.save(update_fields=['user', 'updated_at'])
+
+        # 6.1 Cupons Promocionais (Controle do Dono)
+        today = timezone.localdate()
+        coupons_data = [
+            {
+                'code': 'BEMVINDO15',
+                'description': (
+                    '15% de desconto exclusivo para o seu 1º agendamento'
+                ),
+                'discount_type': Coupon.DiscountType.PERCENTAGE,
+                'discount_value': Decimal('15.00'),
+                'min_order_amount': Decimal('0.00'),
+                'valid_from': today - timedelta(days=1),
+                'valid_until': today + timedelta(days=90),
+                'max_uses': None,
+                'only_first_visit': True,
+                'is_active': True,
+            },
+            {
+                'code': 'BARBA10',
+                'description': (
+                    'R$ 10,00 OFF em serviços ou combos a partir de R$ 60'
+                ),
+                'discount_type': Coupon.DiscountType.FIXED,
+                'discount_value': Decimal('10.00'),
+                'min_order_amount': Decimal('60.00'),
+                'valid_from': today - timedelta(days=1),
+                'valid_until': today + timedelta(days=60),
+                'max_uses': 100,
+                'only_first_visit': False,
+                'is_active': True,
+            },
+            {
+                'code': 'VIP20',
+                'description': (
+                    '20% OFF em pacotes completos acima de R$ 100'
+                ),
+                'discount_type': Coupon.DiscountType.PERCENTAGE,
+                'discount_value': Decimal('20.00'),
+                'min_order_amount': Decimal('100.00'),
+                'valid_from': today - timedelta(days=1),
+                'valid_until': today + timedelta(days=45),
+                'max_uses': 50,
+                'only_first_visit': False,
+                'is_active': True,
+            },
+        ]
+        for cp_data in coupons_data:
+            code = cp_data.pop('code')
+            Coupon.objects.update_or_create(code=code, defaults=cp_data)
+
         # 7. Agendamentos e Comanda Financeira de Demonstração
         target_date = timezone.localdate() + timedelta(days=1)
         while (
@@ -353,6 +425,8 @@ class Command(BaseCommand):
                 'end_time': time(11, 0),
                 'status': Appointment.Status.CONFIRMED,
                 'total_duration_minutes': combo.duration_minutes,
+                'subtotal_price': combo.effective_price,
+                'discount_amount': Decimal('0.00'),
                 'total_price': combo.effective_price,
                 'client_notes': 'Deixar a barba mais quadrada.',
             },
@@ -385,6 +459,8 @@ class Command(BaseCommand):
                 'end_time': time(14, 40),
                 'status': Appointment.Status.CONFIRMED,
                 'total_duration_minutes': degrade.duration_minutes,
+                'subtotal_price': degrade.effective_price,
+                'discount_amount': Decimal('0.00'),
                 'total_price': degrade.effective_price,
             },
         )
@@ -400,6 +476,6 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 'Seed concluído com sucesso! '
                 '(Admin: admin / admin123 | Barbeiros: matheus, lucas, '
-                'rafael / barber123)'
+                'rafael / barber123 | Cliente: 11988003344 / cliente123)'
             )
         )

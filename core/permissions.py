@@ -27,3 +27,13 @@ class IsOwnerOrReadOnly(BasePermission):
         if request.method in ('GET', 'HEAD', 'OPTIONS'):
             return True
         return request.user.is_staff
+
+
+class IsAuthenticatedClient(BasePermission):
+    """Permite acesso a clientes autenticados com perfil vinculado."""
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        return getattr(user, 'client_profile', None) is not None

@@ -69,6 +69,11 @@ class OrderSerializer(serializers.ModelSerializer):
         source='professional.display_name',
         read_only=True,
     )
+    coupon_code = serializers.CharField(
+        source='coupon.code',
+        read_only=True,
+        default=None,
+    )
     tip = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -85,6 +90,8 @@ class OrderSerializer(serializers.ModelSerializer):
             'client_name',
             'professional',
             'professional_name',
+            'coupon',
+            'coupon_code',
             'status',
             'payment_method',
             'subtotal',

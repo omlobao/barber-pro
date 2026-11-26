@@ -74,11 +74,63 @@ FINANCIAL_TAG = '7. Painel — Financeiro, Comandas (PDV) & Caixa'
 )
 class AdminOrderViewSet(viewsets.ModelViewSet):
     queryset = (
-        Order.objects.select_related('client', 'professional')
+        Order.objects.select_related('client', 'professional', 'coupon')
         .prefetch_related('items__service', 'items__product')
     )
     serializer_class = OrderSerializer
     permission_classes = [IsBarberShopStaff]
+
+    @extend_schema(
+        tags=[FINANCIAL_TAG],
+        summary='Aplicar ou remover cupom promocional na comanda aberta',
+        description=(
+            'Valida e aplica um código de cupom à comanda aberta, calculando '
+            'automaticamente `discount_total`. Se `code` for enviado vazio, '
+            'remove o cupom e zera o desconto.'
+        ),
+        request=inline_serializer(
+            name='ApplyOrderCouponRequest',
+            fields={
+                'code': serializers.CharField(
+                    required=False,
+                    allow_blank=True,
+                )
+            },
+        ),
+        responses={200: OrderSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='apply-coupon')
+    def apply_coupon(self, request, pk=None):
+        order = self.get_object()
+        if order.status != Order.Status.OPEN:
+            return Response(
+                {
+                    'detail': (
+                        'Só é possível alterar cupons em comandas abertas.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        code = (request.data.get('code') or '').strip()
+        if not code:
+            order.coupon = None
+            order.discount_total = Decimal('0.00')
+            order.save(
+                update_fields=['coupon', 'discount_total', 'updated_at']
+            )
+            order.recalculate_totals()
+            return Response(OrderSerializer(order).data)
+
+        try:
+            order.apply_coupon(code)
+        except DjangoValidationError as exc:
+            return Response(
+                {'detail': exc.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(OrderSerializer(order).data)
 
     @extend_schema(
         tags=[FINANCIAL_TAG],

@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from catalog.models import Service
+from catalog.models import Coupon, Service
 from clients.models import Client
 from professionals.models import (
     Professional,
@@ -120,21 +120,54 @@ class SchedulingEngineTests(TestCase):
                 client_phone='11966665555',
             )
 
-    def test_public_booking_and_mark_no_show_api(self):
+    def test_public_booking_requires_client_auth_and_applies_coupon(self):
+        coupon = Coupon.objects.create(
+            code='BEMVINDO10',
+            discount_type=Coupon.DiscountType.PERCENTAGE,
+            discount_value=Decimal('10.00'),
+            only_first_visit=True,
+        )
         create_url = reverse('public-booking-create')
         payload = {
             'professional_id': str(self.professional.id),
             'service_ids': [str(self.service.id)],
             'date': self.target_date.strftime('%Y-%m-%d'),
             'start_time': '11:00',
-            'client_name': 'Lucas Faltoso',
-            'client_phone': '11955554444',
+            'coupon_code': 'bemvindo10',
         }
+
+        # Sem autenticação do cliente, o agendamento online é bloqueado (401)
+        unauth_resp = self.api.post(create_url, payload, format='json')
+        self.assertEqual(unauth_resp.status_code, 401)
+
+        # Cadastra o cliente online e agenda usando o token retornado
+        reg_resp = self.api.post(
+            reverse('client-register'),
+            {
+                'name': 'Lucas Faltoso',
+                'phone_number': '(11) 95555-4444',
+                'email': 'lucas.cli@example.com',
+                'password': 'cliente123',
+            },
+            format='json',
+        )
+        self.assertEqual(reg_resp.status_code, 201)
+        access_token = reg_resp.data['access']
+
+        self.api.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
         resp = self.api.post(create_url, payload, format='json')
         self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['subtotal_price'], '50.00')
+        self.assertEqual(resp.data['discount_amount'], '5.00')
+        self.assertEqual(resp.data['total_price'], '45.00')
+        self.assertEqual(resp.data['coupon_code'], 'BEMVINDO10')
         app_id = resp.data['id']
 
+        coupon.refresh_from_db()
+        self.assertEqual(coupon.used_count, 1)
+
         # Marca falta pelo endpoint administrativo e verifica no_show_count
+        self.api.credentials()
         self.api.force_authenticate(user=self.user)
         no_show_url = reverse(
             'admin-appointments-mark-no-show',

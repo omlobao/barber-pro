@@ -76,3 +76,54 @@ class ClientModelAndAPITests(TestCase):
 
         blocked_resp = self.api.get(list_url, {'is_blocked': 'true'})
         self.assertEqual(len(blocked_resp.data), 1)
+
+    def test_client_register_claims_walkin_and_isolates_admin_routes(self):
+        self.client_obj.total_visits = 4
+        self.client_obj.save(update_fields=['total_visits'])
+
+        public_api = APIClient()
+        reg_url = reverse('client-register')
+        reg_resp = public_api.post(
+            reg_url,
+            {
+                'name': 'Marcos Oliveira',
+                'phone_number': '(11) 98765-4321',
+                'email': 'marcos@example.com',
+                'password': 'senhaSegura123',
+            },
+            format='json',
+        )
+        self.assertEqual(reg_resp.status_code, 201)
+        self.assertEqual(reg_resp.data['client']['total_visits'], 4)
+
+        # Impede segundo cadastro com o mesmo WhatsApp
+        dup_reg = public_api.post(
+            reg_url,
+            {
+                'name': 'Marcos Duplicado',
+                'phone_number': '11987654321',
+                'password': 'senhaSegura123',
+            },
+            format='json',
+        )
+        self.assertEqual(dup_reg.status_code, 400)
+
+        # Login por WhatsApp e por e-mail
+        login_url = reverse('client-login')
+        for identifier in ('(11) 98765-4321', 'marcos@example.com'):
+            login_resp = public_api.post(
+                login_url,
+                {'identifier': identifier, 'password': 'senhaSegura123'},
+                format='json',
+            )
+            self.assertEqual(login_resp.status_code, 200)
+            self.assertIn('access', login_resp.data)
+
+        # Cliente logado não pode acessar endpoints restritos (/api/admin)
+        token = reg_resp.data['access']
+        public_api.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        me_resp = public_api.get(reverse('client-me'))
+        self.assertEqual(me_resp.status_code, 200)
+
+        admin_resp = public_api.get(reverse('admin-clients-list'))
+        self.assertEqual(admin_resp.status_code, 403)

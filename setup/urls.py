@@ -10,11 +10,20 @@ from drf_spectacular.views import (
 from rest_framework.routers import DefaultRouter
 
 from catalog.views import (
+    AdminCouponViewSet,
     AdminProductViewSet,
     AdminServiceViewSet,
     PublicServiceViewSet,
 )
-from clients.views import AdminClientViewSet
+from clients.views import (
+    AdminClientViewSet,
+    ClientAppointmentsView,
+    ClientAvailableCouponsView,
+    ClientLoginView,
+    ClientMeView,
+    ClientRegisterView,
+    ClientValidateCouponView,
+)
 from core.views import AuthLoginView, AuthRefreshView, CurrentUserView
 from financial.views import (
     AdminCashFlowViewSet,
@@ -58,6 +67,11 @@ admin_router.register(
     r'products',
     AdminProductViewSet,
     basename='admin-products',
+)
+admin_router.register(
+    r'coupons',
+    AdminCouponViewSet,
+    basename='admin-coupons',
 )
 admin_router.register(
     r'clients',
@@ -111,7 +125,7 @@ urlpatterns = [
         name='redoc',
     ),
 
-    # Autenticação JWT
+    # Autenticação JWT (Equipe & Renovação de Token)
     path(
         'api/auth/login/',
         AuthLoginView.as_view(),
@@ -126,6 +140,38 @@ urlpatterns = [
         'api/auth/me/',
         CurrentUserView.as_view(),
         name='auth-me',
+    ),
+
+    # Área do Cliente (Cadastro, Login, Perfil, Histórico & Cupons)
+    path(
+        'api/client/register/',
+        ClientRegisterView.as_view(),
+        name='client-register',
+    ),
+    path(
+        'api/client/login/',
+        ClientLoginView.as_view(),
+        name='client-login',
+    ),
+    path(
+        'api/client/me/',
+        ClientMeView.as_view(),
+        name='client-me',
+    ),
+    path(
+        'api/client/appointments/',
+        ClientAppointmentsView.as_view(),
+        name='client-appointments',
+    ),
+    path(
+        'api/client/coupons/',
+        ClientAvailableCouponsView.as_view(),
+        name='client-coupons',
+    ),
+    path(
+        'api/client/validate-coupon/',
+        ClientValidateCouponView.as_view(),
+        name='client-validate-coupon',
     ),
 
     # API Pública

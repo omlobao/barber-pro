@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from catalog.models import Product, Service
+from catalog.models import Coupon, Product, Service
 from professionals.models import Professional, WorkingHours
 from scheduling.services import create_booking
 from .models import CashFlowTransaction, ComissionRecord, Order, OrderItem
@@ -139,3 +139,29 @@ class FinancialFlowTests(TestCase):
         )
         with self.assertRaises(ValidationError):
             order.close_order(payment_method=Order.PaymentMethod.CASH)
+
+    def test_apply_coupon_in_pos_order_and_increment_usage_on_close(self):
+        coupon = Coupon.objects.create(
+            code='CAIXA20',
+            discount_type=Coupon.DiscountType.FIXED,
+            discount_value=Decimal('20.00'),
+            min_order_amount=Decimal('50.00'),
+        )
+        order = Order.create_from_appointment(self.appointment)
+        apply_url = reverse('admin-orders-apply-coupon', args=[order.id])
+        resp = self.api.post(apply_url, {'code': 'caixa20'}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['coupon_code'], 'CAIXA20')
+        self.assertEqual(resp.data['discount_total'], '20.00')
+        self.assertEqual(resp.data['total_amount'], '60.00')
+
+        close_url = reverse('admin-orders-close', args=[order.id])
+        close_resp = self.api.post(
+            close_url,
+            {'payment_method': Order.PaymentMethod.CREDIT_CARD},
+            format='json',
+        )
+        self.assertEqual(close_resp.status_code, 200)
+
+        coupon.refresh_from_db()
+        self.assertEqual(coupon.used_count, 1)

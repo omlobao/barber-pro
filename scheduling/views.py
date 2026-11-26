@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from catalog.models import Service
-from core.permissions import IsBarberShopStaff
+from core.permissions import IsAuthenticatedClient, IsBarberShopStaff
 from financial.models import Order
 from financial.serializers import OrderSerializer
 from professionals.models import Professional
@@ -172,20 +172,19 @@ class PublicAvailabilityView(APIView):
 
 @extend_schema(
     tags=[PUBLIC_TAG],
-    summary='Realizar agendamento online (Cliente)',
+    summary='Realizar agendamento online (Cliente Autenticado)',
     description=(
-        'Cria um novo agendamento de forma atômica com lock pessimista '
-        '(`SELECT FOR UPDATE`), impedindo que dois clientes reservem o mesmo '
-        'horário simultaneamente. Retorna os detalhes completos incluindo o '
-        '`cancel_token` para gerenciamento futuro via link do WhatsApp.'
+        'Cria um novo agendamento para o cliente logado de forma atômica com '
+        'lock pessimista (`SELECT FOR UPDATE`), aplicando cupom promocional '
+        'quando informado e retornando o `cancel_token`.'
     ),
     request=PublicBookingCreateSerializer,
     responses={201: PublicAppointmentDetailSerializer},
 )
 class PublicBookingCreateView(generics.CreateAPIView):
-    """Criação pública de agendamento pelo cliente."""
+    """Criação de agendamento online pelo cliente autenticado."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticatedClient]
     serializer_class = PublicBookingCreateSerializer
 
     def create(self, request, *args, **kwargs):
@@ -209,7 +208,7 @@ class PublicAppointmentManageView(generics.RetrieveAPIView):
 
     permission_classes = [AllowAny]
     queryset = (
-        Appointment.objects.select_related('client', 'professional')
+        Appointment.objects.select_related('client', 'professional', 'coupon')
         .prefetch_related('items__service')
     )
     serializer_class = PublicAppointmentDetailSerializer
@@ -324,7 +323,7 @@ class AdminAppointmentViewSet(viewsets.ModelViewSet):
     """CRUD administrativo da agenda de atendimentos."""
 
     queryset = (
-        Appointment.objects.select_related('client', 'professional')
+        Appointment.objects.select_related('client', 'professional', 'coupon')
         .prefetch_related('items__service')
     )
     serializer_class = AdminAppointmentSerializer

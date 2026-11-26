@@ -66,6 +66,14 @@ class Order(models.Model):
         default=Decimal('0.00'),
         verbose_name='Subtotal',
     )
+    coupon = models.ForeignKey(
+        'catalog.Coupon',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders',
+        verbose_name='Cupom Aplicado',
+    )
     discount_total = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -116,13 +124,15 @@ class Order(models.Model):
 
     @classmethod
     def create_from_appointment(cls, appointment):
-        """Abre uma comanda puxando os serviços do agendamento."""
+        """Abre uma comanda puxando os serviços e descontos do agendamento."""
         with transaction.atomic():
             order, created = cls.objects.get_or_create(
                 appointment=appointment,
                 defaults={
                     'client': appointment.client,
                     'professional': appointment.professional,
+                    'coupon': appointment.coupon,
+                    'discount_total': appointment.discount_amount,
                 },
             )
             if created:
@@ -137,6 +147,39 @@ class Order(models.Model):
                     )
                 order.recalculate_totals()
         return order
+
+    def apply_coupon(self, code: str):
+        """Valida e aplica um cupom promocional na comanda aberta."""
+        from catalog.models import Coupon
+
+        if self.status != self.Status.OPEN:
+            raise ValidationError(
+                'Só é possível aplicar cupom em comandas abertas.'
+            )
+
+        clean_code = (code or '').strip().upper()
+        if not clean_code:
+            self.coupon = None
+            self.discount_total = Decimal('0.00')
+            self.save(update_fields=['coupon', 'discount_total', 'updated_at'])
+            self.recalculate_totals()
+            return self
+
+        try:
+            coupon = Coupon.objects.get(code__iexact=clean_code)
+        except Coupon.DoesNotExist:
+            raise ValidationError('Cupom inválido ou não encontrado.')
+
+        items_total = sum(
+            (item.total_price for item in self.items.all()),
+            Decimal('0.00'),
+        )
+        discount = coupon.calculate_discount(items_total, client=self.client)
+        self.coupon = coupon
+        self.discount_total = discount
+        self.save(update_fields=['coupon', 'discount_total', 'updated_at'])
+        self.recalculate_totals()
+        return self
 
     def close_order(self, payment_method):
         """
@@ -214,6 +257,19 @@ class Order(models.Model):
                 order.client.save(
                     update_fields=['total_visits', 'updated_at']
                 )
+
+            # Incrementa uso do cupom caso tenha sido aplicado só no caixa
+            already_counted_on_booking = (
+                order.appointment_id
+                and order.appointment.coupon_id == order.coupon_id
+            )
+            if order.coupon_id and not already_counted_on_booking:
+                coupon_cls = order.coupon.__class__
+                locked_coupon = coupon_cls.objects.select_for_update().get(
+                    pk=order.coupon_id
+                )
+                locked_coupon.used_count += 1
+                locked_coupon.save(update_fields=['used_count', 'updated_at'])
 
             # 3. Gera a comissão para o barbeiro (incluindo gorjeta)
             ComissionRecord.objects.create(

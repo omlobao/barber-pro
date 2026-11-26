@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from catalog.models import Service
+from catalog.models import Coupon, Service
 from clients.models import Client
 from professionals.models import (
     Professional,
@@ -168,8 +168,10 @@ def create_booking(
     service_ids: list,
     target_date: date,
     start_time: time,
-    client_name: str,
-    client_phone: str,
+    client_name: str = "",
+    client_phone: str = "",
+    client: Client | None = None,
+    coupon_code: str = "",
     client_notes: str = "",
 ) -> Appointment:
     """
@@ -191,7 +193,7 @@ def create_booking(
         )
 
     total_duration = sum(s.duration_minutes for s in services)
-    total_price = sum(
+    subtotal_price = sum(
         (s.effective_price for s in services),
         Decimal("0.00"),
     )
@@ -208,19 +210,41 @@ def create_booking(
             "Por favor, escolha outro horário."
         )
 
-    clean_phone = re.sub(r'\D', '', client_phone)
-    client, created = Client.objects.get_or_create(
-        phone_number=clean_phone,
-        defaults={"name": client_name},
-    )
+    if client is None:
+        clean_phone = re.sub(r'\D', '', client_phone)
+        client, created = Client.objects.get_or_create(
+            phone_number=clean_phone,
+            defaults={"name": client_name},
+        )
+        if not created and client_name and client.name != client_name:
+            client.name = client_name
+            client.save(update_fields=["name", "updated_at"])
+
     if client.is_blocked:
         raise ValidationError(
             "Não foi possível concluir o agendamento online. "
             "Entre em contato com a barbearia."
         )
-    if not created and client.name != client_name:
-        client.name = client_name
-        client.save(update_fields=["name", "updated_at"])
+
+    coupon = None
+    discount_amount = Decimal("0.00")
+    clean_code = (coupon_code or "").strip().upper()
+    if clean_code:
+        try:
+            coupon = Coupon.objects.select_for_update().get(
+                code__iexact=clean_code
+            )
+        except Coupon.DoesNotExist:
+            raise ValidationError("Cupom inválido ou não encontrado.")
+
+        discount_amount = coupon.calculate_discount(
+            subtotal_price,
+            client=client,
+        )
+        coupon.used_count += 1
+        coupon.save(update_fields=["used_count", "updated_at"])
+
+    total_price = max(Decimal("0.00"), subtotal_price - discount_amount)
 
     appointment = Appointment(
         client=client,
@@ -230,6 +254,9 @@ def create_booking(
         end_time=end_time,
         status=Appointment.Status.CONFIRMED,
         total_duration_minutes=total_duration,
+        coupon=coupon,
+        subtotal_price=subtotal_price,
+        discount_amount=discount_amount,
         total_price=total_price,
         client_notes=client_notes,
     )

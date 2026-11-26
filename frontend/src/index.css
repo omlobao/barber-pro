@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    accent-color: #D97706;
+    --bg-primary: #0B0D10;
+    --bg-card: #14171D;
+    --border-subtle: #232730;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --accent-amber: #D97706;
+    --accent-amber-hover: #F59E0B;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background-color: #0B0D10;
+    color: #F8FAFC;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    scrollbar-color: #333947 #0B0D10;
+  }
+
+  ::selection {
+    background-color: rgba(217, 119, 6, 0.35);
+    color: #F8FAFC;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  input:not([type="range"]):user-invalid,
+  textarea:user-invalid {
+    border-color: #EF4444;
+  }
+}
+
+.font-display {
+  font-family: 'Cinzel', Georgia, serif;
+}
+
+/* Native <dialog> scroll containment & backdrop styling */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  background: rgba(5, 7, 10, 0.78);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+@keyframes marquee-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap, 1rem)));
+  }
+}
+
+.animate-marquee {
+  animation: marquee-x var(--duration, 32s) linear infinite;
+}

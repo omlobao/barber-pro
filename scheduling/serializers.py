@@ -30,8 +30,8 @@ class AppointmentItemSerializer(serializers.ModelSerializer):
 
 class PublicBookingCreateSerializer(serializers.Serializer):
     """
-    Valida o payload enviado pelo cliente na etapa final do agendamento
-    público e aciona a camada de serviço para criar o agendamento.
+    Valida o payload enviado pelo cliente autenticado na etapa final do
+    agendamento online e aciona a camada de serviço com suporte a cupom.
     """
 
     professional_id = serializers.UUIDField()
@@ -44,8 +44,11 @@ class PublicBookingCreateSerializer(serializers.Serializer):
         format='%H:%M',
         input_formats=['%H:%M', '%H:%M:%S'],
     )
-    client_name = serializers.CharField(max_length=120)
-    client_phone = serializers.CharField(max_length=20)
+    coupon_code = serializers.CharField(
+        max_length=30,
+        required=False,
+        allow_blank=True,
+    )
     client_notes = serializers.CharField(
         max_length=255,
         required=False,
@@ -54,8 +57,8 @@ class PublicBookingCreateSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         """
-        Executado ao chamar serializer.save(). Valida se o profissional
-        está ativo e delega a criação para create_booking.
+        Executado ao chamar serializer.save(). Utiliza o perfil do cliente
+        autenticado e aplica o cupom de desconto se informado.
         """
         try:
             professional = Professional.objects.get(
@@ -67,14 +70,17 @@ class PublicBookingCreateSerializer(serializers.Serializer):
                 'professional_id': 'Profissional não encontrado.'
             })
 
+        request = self.context.get('request')
+        client = getattr(request.user, 'client_profile', None)
+
         try:
             return create_booking(
                 professional=professional,
                 service_ids=validated_data['service_ids'],
                 target_date=validated_data['date'],
                 start_time=validated_data['start_time'],
-                client_name=validated_data['client_name'],
-                client_phone=validated_data['client_phone'],
+                client=client,
+                coupon_code=validated_data.get('coupon_code', ''),
                 client_notes=validated_data.get('client_notes', ''),
             )
         except DjangoValidationError as exc:
@@ -96,6 +102,11 @@ class PublicAppointmentDetailSerializer(serializers.ModelSerializer):
         source='get_status_display',
         read_only=True,
     )
+    coupon_code = serializers.CharField(
+        source='coupon.code',
+        read_only=True,
+        default=None,
+    )
     items = AppointmentItemSerializer(many=True, read_only=True)
 
     class Meta:
@@ -111,7 +122,10 @@ class PublicAppointmentDetailSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'total_duration_minutes',
+            'subtotal_price',
+            'discount_amount',
             'total_price',
+            'coupon_code',
             'client_notes',
             'items',
         ]
@@ -131,6 +145,11 @@ class AdminAppointmentSerializer(serializers.ModelSerializer):
     professional_name = serializers.CharField(
         source='professional.display_name',
         read_only=True,
+    )
+    coupon_code = serializers.CharField(
+        source='coupon.code',
+        read_only=True,
+        default=None,
     )
     items = AppointmentItemSerializer(many=True, read_only=True)
     order_id = serializers.UUIDField(
@@ -153,7 +172,10 @@ class AdminAppointmentSerializer(serializers.ModelSerializer):
             'end_time',
             'status',
             'total_duration_minutes',
+            'subtotal_price',
+            'discount_amount',
             'total_price',
+            'coupon_code',
             'client_notes',
             'internal_notes',
             'items',
