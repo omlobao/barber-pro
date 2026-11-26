@@ -3,13 +3,14 @@
 @layer base {
   :root {
     color-scheme: dark;
-    accent-color: #D97706;
+    accent-color: #E5A93C;
     --bg-primary: #0B0D10;
     --bg-card: #14171D;
     --border-subtle: #232730;
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
     --accent-amber: #D97706;
+    --accent-gold: #E5A93C;
     --accent-amber-hover: #F59E0B;
   }
 
@@ -22,7 +23,7 @@
   }
 
   ::selection {
-    background-color: rgba(217, 119, 6, 0.35);
+    background-color: rgba(229, 169, 60, 0.35);
     color: #F8FAFC;
   }
 
@@ -37,7 +38,8 @@
 }
 
 .font-display {
-  font-family: 'Cinzel', Georgia, serif;
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.01em;
 }
 
 /* Native <dialog> scroll containment & backdrop styling */
@@ -63,4 +65,17 @@ dialog::backdrop {
 
 .animate-marquee {
   animation: marquee-x var(--duration, 32s) linear infinite;
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 18s linear infinite;
 }
