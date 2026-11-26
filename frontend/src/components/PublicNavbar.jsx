@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Calendar, Lock, Menu, Scissors, User, X } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import { useClientAuth } from '@/context/ClientAuthContext';
 
 const NAV_LINKS = [
@@ -13,8 +14,10 @@ const NAV_LINKS = [
 
 export function PublicNavbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isAuthenticated: isStaffAuthenticated } = useAuth();
   const { client, isClientAuthenticated } = useClientAuth();
   const firstName = client?.name ? client.name.trim().split(' ')[0] : '';
+  const showStaffShortcut = isStaffAuthenticated && !isClientAuthenticated;
 
   return (
     <header className="sticky top-0 z-40 border-b border-[#232730]/80 bg-[#0B0D10]/85 backdrop-blur-md">
@@ -58,13 +61,15 @@ export function PublicNavbar() {
             {isClientAuthenticated ? `Olá, ${firstName}` : 'Área do Cliente'}
           </Link>
 
-          <Link
-            to="/admin/agenda"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[#232730] bg-[#14171D] px-3.5 text-xs font-semibold text-[#94A3B8] transition hover:border-[#D97706]/40 hover:text-[#F8FAFC]"
-          >
-            <Lock className="h-3.5 w-3.5 text-[#D97706]" />
-            Equipe
-          </Link>
+          {showStaffShortcut ? (
+            <Link
+              to="/admin/agenda"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-[#232730] bg-[#14171D] px-3.5 text-xs font-semibold text-[#94A3B8] transition hover:border-[#D97706]/40 hover:text-[#F8FAFC]"
+            >
+              <Lock className="h-3.5 w-3.5 text-[#D97706]" />
+              Painel
+            </Link>
+          ) : null}
 
           <Link
             to="/agendar"
@@ -124,14 +129,16 @@ export function PublicNavbar() {
                     ? `Minha Conta (${firstName})`
                     : 'Entrar / Criar Cadastro'}
                 </Link>
-                <Link
-                  to="/admin/agenda"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-[#232730] bg-[#0B0D10] px-4 text-sm font-medium text-[#94A3B8]"
-                >
-                  <Lock className="h-4 w-4 text-[#D97706]" />
-                  Painel da Equipe
-                </Link>
+                {showStaffShortcut ? (
+                  <Link
+                    to="/admin/agenda"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-[#232730] bg-[#0B0D10] px-4 text-sm font-medium text-[#94A3B8]"
+                  >
+                    <Lock className="h-4 w-4 text-[#D97706]" />
+                    Painel da Equipe
+                  </Link>
+                ) : null}
               </div>
             </div>
           </motion.div>
