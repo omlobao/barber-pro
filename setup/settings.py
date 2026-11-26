@@ -136,6 +136,15 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        'DJANGO_CSRF_TRUSTED_ORIGINS',
+        _DEFAULT_CORS,
+    ).split(',')
+    if origin.strip()
+]
+
 
 # Django REST Framework & SimpleJWT
 
