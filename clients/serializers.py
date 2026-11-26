@@ -3,9 +3,11 @@ import re
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.views import serialize_staff_user
 from .models import Client
 
 User = get_user_model()
@@ -236,15 +238,51 @@ class ClientRegisterSerializer(serializers.Serializer):
 
 
 class ClientLoginSerializer(serializers.Serializer):
-    """Autenticação do cliente usando WhatsApp (com DDD) ou e-mail."""
+    """
+    Login unificado inteligente: autentica clientes (WhatsApp/e-mail) ou
+    membros da equipe/administradores (usuário, e-mail ou WhatsApp),
+    sinalizando `account_type` (`CLIENT` ou `STAFF`) para redirecionamento.
+    """
 
     identifier = serializers.CharField()
     password = serializers.CharField(write_only=True)
 
+    def _find_staff_user(self, raw_id: str, digits: str):
+        staff_filter = Q(username__iexact=raw_id)
+        if '@' in raw_id:
+            staff_filter |= Q(email__iexact=raw_id)
+        if digits:
+            staff_filter |= Q(username__iexact=digits)
+            if len(digits) >= 10:
+                staff_filter |= Q(professional_profile__phone_number=digits)
+
+        candidates = User.objects.select_related(
+            'professional_profile'
+        ).filter(staff_filter, is_active=True)
+
+        for candidate in candidates:
+            prof = getattr(candidate, 'professional_profile', None)
+            if candidate.is_staff or (prof and prof.is_active):
+                return candidate
+        return None
+
     def validate(self, attrs):
         raw_id = (attrs.get('identifier') or '').strip()
         password = attrs.get('password') or ''
+        digits = re.sub(r'\D', '', raw_id)
 
+        # 1. Verifica se é Administrador ou Barbeiro ativo
+        staff_user = self._find_staff_user(raw_id, digits)
+        if staff_user and staff_user.check_password(password):
+            refresh = RefreshToken.for_user(staff_user)
+            return {
+                'account_type': 'STAFF',
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': serialize_staff_user(staff_user),
+            }
+
+        # 2. Caso contrário, autentica como Cliente da barbearia
         if '@' in raw_id:
             client = (
                 Client.objects.select_related('user')
@@ -252,7 +290,6 @@ class ClientLoginSerializer(serializers.Serializer):
                 .first()
             )
         else:
-            digits = re.sub(r'\D', '', raw_id)
             client = (
                 Client.objects.select_related('user')
                 .filter(phone_number=digits, user__isnull=False)
@@ -266,11 +303,12 @@ class ClientLoginSerializer(serializers.Serializer):
             or not client.user.check_password(password)
         ):
             raise serializers.ValidationError({
-                'detail': 'WhatsApp/e-mail ou senha incorretos.'
+                'detail': 'Dados de acesso ou senha incorretos.'
             })
 
         refresh = RefreshToken.for_user(client.user)
         return {
+            'account_type': 'CLIENT',
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'client': ClientProfileSerializer(client).data,

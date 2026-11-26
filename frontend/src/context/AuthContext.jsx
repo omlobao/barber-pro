@@ -49,6 +49,12 @@ export function AuthProvider({ children }) {
     return me;
   }, [fetchMe]);
 
+  const hydrateStaffSession = useCallback((tokens, staffUser) => {
+    setStoredTokens(tokens);
+    setUser(staffUser);
+    setLoading(false);
+  }, []);
+
   const logout = useCallback(() => {
     setStoredTokens(null);
     setUser(null);
@@ -62,6 +68,7 @@ export function AuthProvider({ children }) {
         isAuthenticated: Boolean(user),
         isAdmin: Boolean(user?.is_staff),
         login,
+        hydrateStaffSession,
         logout,
         refreshUser: fetchMe,
       }}

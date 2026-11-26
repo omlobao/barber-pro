@@ -55,6 +55,31 @@ class AuthRefreshView(TokenRefreshView):
     pass
 
 
+def serialize_staff_user(user) -> dict:
+    """Formata o payload de identificação de administrador ou barbeiro."""
+    profile = getattr(user, 'professional_profile', None)
+    professional_data = None
+    if profile is not None:
+        professional_data = {
+            'id': str(profile.id),
+            'display_name': profile.display_name,
+            'slug': profile.slug,
+            'is_active': profile.is_active,
+        }
+
+    role = 'ADMIN' if user.is_staff else 'PROFESSIONAL'
+    return {
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'is_staff': user.is_staff,
+        'role': role,
+        'professional': professional_data,
+    }
+
+
 class CurrentUserView(APIView):
     """
     Identifica o usuário autenticado e seu perfil de barbeiro vinculado.
@@ -74,27 +99,4 @@ class CurrentUserView(APIView):
         responses={200: CurrentUserResponseSerializer},
     )
     def get(self, request):
-        user = request.user
-        profile = getattr(user, 'professional_profile', None)
-
-        professional_data = None
-        if profile is not None:
-            professional_data = {
-                'id': str(profile.id),
-                'display_name': profile.display_name,
-                'slug': profile.slug,
-                'is_active': profile.is_active,
-            }
-
-        role = 'ADMIN' if user.is_staff else 'PROFESSIONAL'
-
-        return Response({
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'is_staff': user.is_staff,
-            'role': role,
-            'professional': professional_data,
-        })
+        return Response(serialize_staff_user(request.user))

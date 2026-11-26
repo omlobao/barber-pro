@@ -62,9 +62,19 @@ export function ClientAuthProvider({ children }) {
       identifier,
       password,
     });
+    if (data.account_type === 'STAFF') {
+      return {
+        accountType: 'STAFF',
+        tokens: { access: data.access, refresh: data.refresh },
+        user: data.user,
+      };
+    }
     setStoredClientTokens({ access: data.access, refresh: data.refresh });
     setClient(data.client);
-    return data.client;
+    return {
+      accountType: 'CLIENT',
+      client: data.client,
+    };
   }, []);
 
   const registerClient = useCallback(async (payload) => {

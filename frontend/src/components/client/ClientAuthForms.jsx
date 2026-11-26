@@ -1,4 +1,5 @@
 import React, { useId, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Eye,
   EyeOff,
@@ -9,6 +10,7 @@ import {
   User,
   UserPlus,
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import { useClientAuth } from '@/context/ClientAuthContext';
 import { extractErrorMessage, formatPhoneMask } from '@/utils/formatters';
 
@@ -17,7 +19,9 @@ export function ClientAuthForms({
   onSuccess,
   compact = false,
 }) {
+  const { hydrateStaffSession } = useAuth();
   const { loginClient, registerClient } = useClientAuth();
+  const navigate = useNavigate();
   const baseId = useId();
 
   const [mode, setMode] = useState(defaultMode);
@@ -47,11 +51,16 @@ export function ClientAuthForms({
     setError('');
     setSubmitting(true);
     try {
-      const logged = await loginClient(identifier.trim(), loginPassword);
-      onSuccess?.(logged);
+      const result = await loginClient(identifier.trim(), loginPassword);
+      if (result?.accountType === 'STAFF') {
+        hydrateStaffSession(result.tokens, result.user);
+        navigate('/admin/agenda', { replace: true });
+        return;
+      }
+      onSuccess?.(result?.client);
     } catch (err) {
       setError(
-        extractErrorMessage(err, 'WhatsApp/e-mail ou senha incorretos.')
+        extractErrorMessage(err, 'Dados de acesso ou senha incorretos.')
       );
     } finally {
       setSubmitting(false);
@@ -159,10 +168,10 @@ export function ClientAuthForms({
               htmlFor={`${baseId}-login-id`}
               className="mb-1.5 block text-xs font-semibold text-[#F8FAFC]"
             >
-              Seu WhatsApp (com DDD) ou E-mail *
+              WhatsApp, E-mail ou Usuário *
             </label>
             <div className="relative">
-              <Phone className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-[#94A3B8]" />
+              <User className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-[#94A3B8]" />
               <input
                 id={`${baseId}-login-id`}
                 name="username"
@@ -173,13 +182,15 @@ export function ClientAuthForms({
                 autoCapitalize="none"
                 spellCheck={false}
                 enterKeyHint="next"
-                placeholder="(11) 99999-9999 ou seu@email.com"
+                placeholder="(11) 99999-9999, e-mail ou usuário"
                 value={identifier}
                 onChange={(e) => {
                   setError('');
                   const val = e.target.value;
                   const looksLikePhone =
-                    !val.includes('@') && /^[\d()\s-]+$/.test(val) && val.length > 0;
+                    !val.includes('@') &&
+                    /^[\d()\s-]+$/.test(val) &&
+                    val.replace(/\D/g, '').length >= 10;
                   setIdentifier(looksLikePhone ? formatPhoneMask(val) : val);
                 }}
                 className="min-h-[48px] w-full rounded-xl border border-[#232730] bg-[#0B0D10] pr-4 pl-10 text-base text-[#F8FAFC] placeholder-[#94A3B8]/50 focus:border-[#D97706] focus:outline-none sm:text-sm"

@@ -127,3 +127,14 @@ class ClientModelAndAPITests(TestCase):
 
         admin_resp = public_api.get(reverse('admin-clients-list'))
         self.assertEqual(admin_resp.status_code, 403)
+
+    def test_unified_login_recognizes_staff_account(self):
+        public_api = APIClient()
+        resp = public_api.post(
+            reverse('client-login'),
+            {'identifier': 'admin_clients', 'password': 'password123'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['account_type'], 'STAFF')
+        self.assertEqual(resp.data['user']['role'], 'ADMIN')
