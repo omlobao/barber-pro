@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from catalog.models import Service
 from .models import Professional, ScheduleException, WorkingHours
 
 
@@ -71,3 +72,42 @@ class ProfessionalsModelAndAPITests(TestCase):
         resp = self.api.put(url, payload, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 2)
+
+    def test_create_employee_with_login_and_default_schedule_via_api(self):
+        srv = Service.objects.create(
+            name='Corte Fade',
+            price='55.00',
+            duration_minutes=40,
+        )
+        url = reverse('admin-professionals-list')
+        resp = self.api.post(
+            url,
+            {
+                'display_name': 'Jhonas Rex',
+                'username': 'jhonas',
+                'email': 'jhonas@barberpro.com',
+                'password': 'barber123',
+                'phone_number': '(61) 99988-7766',
+                'bio': 'Especialista em vapor de ozônio e visagismo.',
+                'service_comission_rate': '50.00',
+                'product_comission_rate': '15.00',
+                'slot_interval_minutes': 30,
+                'buffer_time_minutes': 5,
+                'services': [str(srv.id)],
+            },
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['username'], 'jhonas')
+        self.assertEqual(resp.data['slug'], 'jhonas-rex')
+        self.assertEqual(len(resp.data['working_hours']), 7)
+
+        # Novo barbeiro já consegue logar pelo endpoint unificado
+        login_resp = APIClient().post(
+            reverse('client-login'),
+            {'identifier': 'jhonas', 'password': 'barber123'},
+            format='json',
+        )
+        self.assertEqual(login_resp.status_code, 200)
+        self.assertEqual(login_resp.data['account_type'], 'STAFF')
+        self.assertEqual(login_resp.data['user']['role'], 'PROFESSIONAL')

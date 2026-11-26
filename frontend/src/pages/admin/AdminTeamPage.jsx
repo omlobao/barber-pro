@@ -1,11 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarOff, Clock, Plus, Trash2 } from 'lucide-react';
+import {
+  CalendarOff,
+  Clock,
+  Edit3,
+  Eye,
+  EyeOff,
+  PauseCircle,
+  PlayCircle,
+  Plus,
+  Trash2,
+  UserPlus,
+} from 'lucide-react';
 import api from '@/api/client';
+import { useAuth } from '@/context/AuthContext';
 import { ModalDialog } from '@/components/ui/ModalDialog';
 import { SpellBadge } from '@/components/spell/SpellBadge';
 import {
   extractErrorMessage,
   formatDateBR,
+  formatPhoneMask,
   toLocalISODate,
 } from '@/utils/formatters';
 
@@ -19,15 +32,42 @@ const DAYS_PT = {
   7: 'Domingo',
 };
 
+const EMPTY_EMP_FORM = {
+  display_name: '',
+  phone_number: '',
+  username: '',
+  email: '',
+  password: '',
+  bio: '',
+  service_comission_rate: '50.00',
+  product_comission_rate: '10.00',
+  slot_interval_minutes: 30,
+  buffer_time_minutes: 0,
+  services: [],
+  is_active: true,
+};
+
 export default function AdminTeamPage() {
+  const { isAdmin } = useAuth();
   const [professionals, setProfessionals] = useState([]);
+  const [servicesCatalog, setServicesCatalog] = useState([]);
   const [exceptions, setExceptions] = useState([]);
   const [feedback, setFeedback] = useState('');
 
+  // Modal Criar / Editar Funcionário (Barbeiro)
+  const [empModalOpen, setEmpModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
+  const [empForm, setEmpForm] = useState(EMPTY_EMP_FORM);
+  const [showEmpPassword, setShowEmpPassword] = useState(false);
+  const [savingEmp, setSavingEmp] = useState(false);
+  const [empFormError, setEmpFormError] = useState('');
+
+  // Modal Grade Semanal
   const [editingProf, setEditingProf] = useState(null);
   const [hoursDraft, setHoursDraft] = useState([]);
   const [savingHours, setSavingHours] = useState(false);
 
+  // Modal Nova Exceção
   const [excModalOpen, setExcModalOpen] = useState(false);
   const [excProfId, setExcProfId] = useState('');
   const [excDate, setExcDate] = useState(() => toLocalISODate());
@@ -39,12 +79,14 @@ export default function AdminTeamPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [profRes, excRes] = await Promise.all([
+      const [profRes, excRes, srvRes] = await Promise.all([
         api.get('/api/admin/professionals/'),
         api.get('/api/admin/schedule-exceptions/'),
+        api.get('/api/admin/services/'),
       ]);
       setProfessionals(profRes.data || []);
       setExceptions(excRes.data || []);
+      setServicesCatalog((srvRes.data || []).filter((s) => s.is_active));
     } catch (err) {
       setFeedback(extractErrorMessage(err, 'Erro ao carregar equipe.'));
     }
@@ -53,6 +95,110 @@ export default function AdminTeamPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const openNewEmployeeModal = () => {
+    setEditingMember(null);
+    setEmpFormError('');
+    setShowEmpPassword(false);
+    setEmpForm({
+      ...EMPTY_EMP_FORM,
+      services: servicesCatalog.map((s) => s.id),
+    });
+    setEmpModalOpen(true);
+  };
+
+  const openEditEmployeeModal = (prof) => {
+    setEditingMember(prof);
+    setEmpFormError('');
+    setShowEmpPassword(false);
+    setEmpForm({
+      display_name: prof.display_name || '',
+      phone_number: formatPhoneMask(prof.phone_number || ''),
+      username: prof.username || '',
+      email: prof.email || '',
+      password: '',
+      bio: prof.bio || '',
+      service_comission_rate: String(prof.service_comission_rate ?? '50.00'),
+      product_comission_rate: String(prof.product_comission_rate ?? '10.00'),
+      slot_interval_minutes: Number(prof.slot_interval_minutes || 30),
+      buffer_time_minutes: Number(prof.buffer_time_minutes || 0),
+      services: (prof.services || []).map(String),
+      is_active: Boolean(prof.is_active),
+    });
+    setEmpModalOpen(true);
+  };
+
+  const toggleServiceInForm = (serviceId) => {
+    const idStr = String(serviceId);
+    setEmpForm((prev) => {
+      const exists = prev.services.includes(idStr);
+      return {
+        ...prev,
+        services: exists
+          ? prev.services.filter((item) => item !== idStr)
+          : [...prev.services, idStr],
+      };
+    });
+  };
+
+  const handleSaveEmployee = async (e) => {
+    e.preventDefault();
+    setSavingEmp(true);
+    setEmpFormError('');
+    setFeedback('');
+
+    const payload = {
+      display_name: empForm.display_name.trim(),
+      phone_number: empForm.phone_number,
+      username: empForm.username.trim().toLowerCase(),
+      email: empForm.email.trim() || '',
+      bio: empForm.bio.trim(),
+      service_comission_rate: Number(
+        empForm.service_comission_rate || 0
+      ).toFixed(2),
+      product_comission_rate: Number(
+        empForm.product_comission_rate || 0
+      ).toFixed(2),
+      slot_interval_minutes: Number(empForm.slot_interval_minutes) || 30,
+      buffer_time_minutes: Number(empForm.buffer_time_minutes) || 0,
+      services: empForm.services,
+      is_active: Boolean(empForm.is_active),
+    };
+
+    if (empForm.password.trim()) {
+      payload.password = empForm.password.trim();
+    }
+
+    try {
+      if (editingMember) {
+        await api.patch(`/api/admin/professionals/${editingMember.id}/`, payload);
+      } else {
+        await api.post('/api/admin/professionals/', payload);
+      }
+      setEmpModalOpen(false);
+      await loadData();
+    } catch (err) {
+      setEmpFormError(
+        extractErrorMessage(err, 'Não foi possível salvar o funcionário.')
+      );
+    } finally {
+      setSavingEmp(false);
+    }
+  };
+
+  const handleToggleActive = async (prof) => {
+    setFeedback('');
+    try {
+      await api.patch(`/api/admin/professionals/${prof.id}/`, {
+        is_active: !prof.is_active,
+      });
+      await loadData();
+    } catch (err) {
+      setFeedback(
+        extractErrorMessage(err, 'Não foi possível alterar o status.')
+      );
+    }
+  };
 
   const openScheduleEditor = (prof) => {
     const existingMap = new Map(
@@ -63,8 +209,12 @@ export default function AdminTeamPage() {
       return {
         day_of_week: day,
         is_working: item ? item.is_working : day !== 7,
-        start_time: item?.start_time ? String(item.start_time).slice(0, 5) : '09:00',
-        end_time: item?.end_time ? String(item.end_time).slice(0, 5) : '19:00',
+        start_time: item?.start_time
+          ? String(item.start_time).slice(0, 5)
+          : '09:00',
+        end_time: item?.end_time
+          ? String(item.end_time).slice(0, 5)
+          : '19:00',
         break_start: item?.break_start
           ? String(item.break_start).slice(0, 5)
           : '12:00',
@@ -139,62 +289,139 @@ export default function AdminTeamPage() {
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h1 className="font-display text-2xl font-bold text-[#F8FAFC] sm:text-3xl">
-            Equipe & Expediente
+            Equipe &amp; Expediente
           </h1>
           <p className="mt-1 text-sm text-[#94A3B8]">
-            Configure a grade semanal de cada barbeiro, folgas, férias e feriados.
+            Cadastre novos barbeiros, gerencie comissões, grade semanal e folgas.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setExcModalOpen(true)}
-          className="inline-flex min-h-[46px] items-center gap-2 rounded-xl bg-[#D97706] px-4 text-xs font-bold text-[#0B0D10]"
-        >
-          <Plus className="h-4 w-4" />
-          Registrar Folga / Feriado
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={openNewEmployeeModal}
+              className="inline-flex min-h-[46px] items-center gap-2 rounded-xl bg-[#D97706] px-4 text-xs font-bold text-[#0B0D10] shadow-lg shadow-[#D97706]/20 transition hover:bg-[#F59E0B]"
+            >
+              <UserPlus className="h-4 w-4" />
+              Novo Funcionário
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => setExcModalOpen(true)}
+            className="inline-flex min-h-[46px] items-center gap-2 rounded-xl border border-[#232730] bg-[#14171D] px-4 text-xs font-bold text-[#F8FAFC] transition hover:border-[#D97706]/50"
+          >
+            <Plus className="h-4 w-4 text-[#D97706]" />
+            Registrar Folga / Feriado
+          </button>
+        </div>
       </div>
 
       {feedback ? (
-        <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300">
+        <div
+          role="alert"
+          className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300"
+        >
           {feedback}
         </div>
       ) : null}
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {professionals.map((p) => (
           <div
             key={p.id}
             className="flex flex-col justify-between rounded-2xl border border-[#232730] bg-[#14171D] p-5"
           >
             <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-[#F8FAFC]">
-                  {p.display_name}
-                </h3>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-[#F8FAFC]">
+                    {p.display_name}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-[#94A3B8]">
+                    Usuário:{' '}
+                    <strong className="font-mono text-[#F59E0B]">
+                      @{p.username}
+                    </strong>{' '}
+                    • {formatPhoneMask(p.phone_number)}
+                  </p>
+                </div>
                 <SpellBadge variant={p.is_active ? 'emerald' : 'rose'} size="sm">
                   {p.is_active ? 'Ativo' : 'Inativo'}
                 </SpellBadge>
               </div>
-              <p className="mt-2 text-xs text-[#94A3B8]">
-                Comissão Serviço: <strong>{p.service_comission_rate}%</strong> •
-                Produto: <strong>{p.product_comission_rate}%</strong>
-              </p>
-              <p className="mt-1 text-xs text-[#94A3B8]">
-                Intervalo: {p.slot_interval_minutes}m • Buffer:{' '}
-                {p.buffer_time_minutes}m
-              </p>
+
+              {p.bio ? (
+                <p className="mt-2.5 line-clamp-2 text-xs text-[#94A3B8]">
+                  {p.bio}
+                </p>
+              ) : null}
+
+              <div className="mt-3 space-y-1 rounded-xl border border-[#232730] bg-[#0B0D10] p-3 text-xs text-[#94A3B8]">
+                <div className="flex justify-between">
+                  <span>Comissões:</span>
+                  <strong className="text-[#F8FAFC]">
+                    {p.service_comission_rate}% serv. /{' '}
+                    {p.product_comission_rate}% prod.
+                  </strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>Agenda:</span>
+                  <strong className="text-[#F8FAFC]">
+                    {p.slot_interval_minutes}m (buffer {p.buffer_time_minutes}m)
+                  </strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>Serviços habilitados:</span>
+                  <strong className="text-[#F59E0B]">
+                    {(p.services || []).length} serviço(s)
+                  </strong>
+                </div>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => openScheduleEditor(p)}
-              className="mt-5 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl border border-[#D97706]/50 bg-[#0B0D10] text-xs font-bold text-[#F59E0B] hover:bg-[#D97706] hover:text-[#0B0D10]"
-            >
-              <Clock className="h-3.5 w-3.5" />
-              Editar Grade Semanal
-            </button>
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                onClick={() => openScheduleEditor(p)}
+                className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl border border-[#D97706]/50 bg-[#0B0D10] text-xs font-bold text-[#F59E0B] transition hover:bg-[#D97706] hover:text-[#0B0D10]"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Editar Grade Semanal
+              </button>
+
+              {isAdmin ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEditEmployeeModal(p)}
+                    className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-xs font-semibold text-[#F8FAFC] hover:border-[#D97706]/40"
+                  >
+                    <Edit3 className="h-3.5 w-3.5 text-[#D97706]" />
+                    Editar Dados
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(p)}
+                    className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-xs font-semibold text-[#94A3B8] hover:text-[#F8FAFC]"
+                  >
+                    {p.is_active ? (
+                      <>
+                        <PauseCircle className="h-3.5 w-3.5 text-amber-400" />
+                        Inativar
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle className="h-3.5 w-3.5 text-emerald-400" />
+                        Reativar
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
@@ -202,7 +429,7 @@ export default function AdminTeamPage() {
       {/* Exceções e Feriados */}
       <div className="mt-10">
         <h2 className="text-sm font-bold uppercase tracking-wider text-[#94A3B8]">
-          Exceções de Agenda & Feriados ({exceptions.length})
+          Exceções de Agenda &amp; Feriados ({exceptions.length})
         </h2>
         <div className="mt-3 space-y-2">
           {exceptions.slice(0, 12).map((ex) => (
@@ -238,6 +465,333 @@ export default function AdminTeamPage() {
           ))}
         </div>
       </div>
+
+      {/* Modal Criar / Editar Funcionário */}
+      <ModalDialog
+        open={empModalOpen}
+        onClose={() => setEmpModalOpen(false)}
+        title={
+          editingMember
+            ? `Editar Funcionário — ${editingMember.display_name}`
+            : 'Cadastrar Novo Funcionário / Barbeiro'
+        }
+        subtitle={
+          editingMember
+            ? 'Atualize comissões, serviços habilitados ou credenciais de acesso.'
+            : 'Cria o acesso ao painel e já configura o expediente padrão (Seg a Sáb, 09h às 19h).'
+        }
+        maxWidth="max-w-2xl"
+      >
+        <form onSubmit={handleSaveEmployee} className="space-y-4">
+          {empFormError ? (
+            <div
+              role="alert"
+              className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs font-medium text-rose-300"
+            >
+              {empFormError}
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="emp-name"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Nome Completo / Artístico *
+              </label>
+              <input
+                id="emp-name"
+                required
+                placeholder="Ex.: Jhonas Rex"
+                value={empForm.display_name}
+                onChange={(e) =>
+                  setEmpForm((prev) => ({
+                    ...prev,
+                    display_name: e.target.value,
+                  }))
+                }
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="emp-phone"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                WhatsApp com DDD *
+              </label>
+              <input
+                id="emp-phone"
+                type="tel"
+                inputMode="tel"
+                required
+                placeholder="(61) 99999-9999"
+                value={empForm.phone_number}
+                onChange={(e) =>
+                  setEmpForm((prev) => ({
+                    ...prev,
+                    phone_number: formatPhoneMask(e.target.value),
+                  }))
+                }
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label
+                htmlFor="emp-username"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Usuário de Login *
+              </label>
+              <input
+                id="emp-username"
+                required
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="Ex.: jhonas"
+                value={empForm.username}
+                onChange={(e) =>
+                  setEmpForm((prev) => ({
+                    ...prev,
+                    username: e.target.value.toLowerCase().replace(/\s+/g, ''),
+                  }))
+                }
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 font-mono text-sm text-[#F8FAFC]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="emp-email"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                E-mail (opcional)
+              </label>
+              <input
+                id="emp-email"
+                type="email"
+                placeholder="jhonas@barbearia.com"
+                value={empForm.email}
+                onChange={(e) =>
+                  setEmpForm((prev) => ({ ...prev, email: e.target.value }))
+                }
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="emp-password"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                {editingMember ? 'Nova Senha (opcional)' : 'Senha Inicial *'}
+              </label>
+              <div className="relative">
+                <input
+                  id="emp-password"
+                  type={showEmpPassword ? 'text' : 'password'}
+                  required={!editingMember}
+                  minLength={6}
+                  autoComplete="new-password"
+                  placeholder={editingMember ? 'Manter atual' : 'Mín. 6 caract.'}
+                  value={empForm.password}
+                  onChange={(e) =>
+                    setEmpForm((prev) => ({
+                      ...prev,
+                      password: e.target.value,
+                    }))
+                  }
+                  className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] pr-10 pl-3 text-sm text-[#F8FAFC]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEmpPassword((prev) => !prev)}
+                  aria-label={showEmpPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute top-1/2 right-2 -translate-y-1/2 text-[#94A3B8] hover:text-[#F8FAFC]"
+                >
+                  {showEmpPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <label
+                htmlFor="emp-srv-comm"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Comissão Serv. (%)
+              </label>
+              <input
+                id="emp-srv-comm"
+                type="number"
+                step="0.5"
+                min="0"
+                max="100"
+                value={empForm.service_comission_rate}
+                onChange={(e) =>
+                  setEmpForm((prev) => ({
+                    ...prev,
+                    service_comission_rate: e.target.value,
+                  }))
+                }
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="emp-prod-comm"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Comissão Prod. (%)
+              </label>
+              <input
+                id="emp-prod-comm"
+                type="number"
+                step="0.5"
+                min="0"
+                max="100"
+                value={empForm.product_comission_rate}
+                onChange={(e) =>
+                  setEmpForm((prev) => ({
+                    ...prev,
+                    product_comission_rate: e.target.value,
+                  }))
+                }
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="emp-interval"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Intervalo (min)
+              </label>
+              <input
+                id="emp-interval"
+                type="number"
+                min="10"
+                max="120"
+                step="5"
+                value={empForm.slot_interval_minutes}
+                onChange={(e) =>
+                  setEmpForm((prev) => ({
+                    ...prev,
+                    slot_interval_minutes: e.target.value,
+                  }))
+                }
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="emp-buffer"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Buffer Limpeza (m)
+              </label>
+              <input
+                id="emp-buffer"
+                type="number"
+                min="0"
+                max="60"
+                step="5"
+                value={empForm.buffer_time_minutes}
+                onChange={(e) =>
+                  setEmpForm((prev) => ({
+                    ...prev,
+                    buffer_time_minutes: e.target.value,
+                  }))
+                }
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="emp-bio"
+              className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+            >
+              Biografia / Especialidades (exibida na vitrine)
+            </label>
+            <textarea
+              id="emp-bio"
+              rows={2}
+              placeholder="Ex.: Master Barber especialista em degradê navalhado e vapor de ozônio."
+              value={empForm.bio}
+              onChange={(e) =>
+                setEmpForm((prev) => ({ ...prev, bio: e.target.value }))
+              }
+              className="w-full rounded-xl border border-[#232730] bg-[#0B0D10] p-3 text-sm text-[#F8FAFC]"
+            />
+          </div>
+
+          <fieldset className="rounded-xl border border-[#232730] bg-[#0B0D10] p-3.5">
+            <legend className="px-1 text-xs font-semibold text-[#F8FAFC]">
+              Serviços que este profissional realiza ({empForm.services.length})
+            </legend>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {servicesCatalog.map((srv) => {
+                const checked = empForm.services.includes(String(srv.id));
+                return (
+                  <div key={srv.id} className="flex items-center gap-2">
+                    <input
+                      id={`emp-srv-${srv.id}`}
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleServiceInForm(srv.id)}
+                      className="h-4 w-4 accent-[#D97706]"
+                    />
+                    <label
+                      htmlFor={`emp-srv-${srv.id}`}
+                      className="text-xs text-[#CBD5E1]"
+                    >
+                      {srv.name}
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setEmpModalOpen(false)}
+              className="min-h-[44px] rounded-xl border border-[#232730] px-4 text-xs font-semibold text-[#94A3B8]"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={savingEmp}
+              className="min-h-[44px] rounded-xl bg-[#D97706] px-5 text-xs font-bold text-[#0B0D10]"
+            >
+              {savingEmp
+                ? 'Salvando...'
+                : editingMember
+                ? 'Salvar Alterações'
+                : 'Cadastrar Funcionário'}
+            </button>
+          </div>
+        </form>
+      </ModalDialog>
 
       {/* Modal Grade Semanal */}
       <ModalDialog
@@ -383,7 +937,7 @@ export default function AdminTeamPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 items-end">
+          <div className="grid grid-cols-2 items-end gap-3">
             <div>
               <label
                 htmlFor="exc-date"
