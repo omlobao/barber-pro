@@ -8,6 +8,16 @@ export function formatCurrency(value) {
   return BRL_FORMATTER.format(Number.isFinite(num) ? num : 0);
 }
 
+export function resolveMediaUrl(url) {
+  if (!url) return '';
+  const raw = String(url);
+  if (!import.meta.env.VITE_API_URL && raw.includes('/media/')) {
+    const idx = raw.indexOf('/media/');
+    return raw.slice(idx);
+  }
+  return raw;
+}
+
 export function formatPhoneMask(value = '') {
   const digits = String(value).replace(/\D/g, '').slice(0, 11);
   if (!digits) return '';

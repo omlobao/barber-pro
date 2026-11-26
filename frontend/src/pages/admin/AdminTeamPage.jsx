@@ -5,11 +5,13 @@ import {
   Edit3,
   Eye,
   EyeOff,
+  ImagePlus,
   PauseCircle,
   PlayCircle,
   Plus,
   Trash2,
   UserPlus,
+  X,
 } from 'lucide-react';
 import api from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
@@ -19,6 +21,7 @@ import {
   extractErrorMessage,
   formatDateBR,
   formatPhoneMask,
+  resolveMediaUrl,
   toLocalISODate,
 } from '@/utils/formatters';
 
@@ -58,6 +61,9 @@ export default function AdminTeamPage() {
   const [empModalOpen, setEmpModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
   const [empForm, setEmpForm] = useState(EMPTY_EMP_FORM);
+  const [empPhotoFile, setEmpPhotoFile] = useState(null);
+  const [empPhotoPreview, setEmpPhotoPreview] = useState('');
+  const [empRemovePhoto, setEmpRemovePhoto] = useState(false);
   const [showEmpPassword, setShowEmpPassword] = useState(false);
   const [savingEmp, setSavingEmp] = useState(false);
   const [empFormError, setEmpFormError] = useState('');
@@ -100,6 +106,9 @@ export default function AdminTeamPage() {
     setEditingMember(null);
     setEmpFormError('');
     setShowEmpPassword(false);
+    setEmpPhotoFile(null);
+    setEmpPhotoPreview('');
+    setEmpRemovePhoto(false);
     setEmpForm({
       ...EMPTY_EMP_FORM,
       services: servicesCatalog.map((s) => s.id),
@@ -111,6 +120,11 @@ export default function AdminTeamPage() {
     setEditingMember(prof);
     setEmpFormError('');
     setShowEmpPassword(false);
+    setEmpPhotoFile(null);
+    setEmpPhotoPreview(
+      prof.profile_picture ? resolveMediaUrl(prof.profile_picture) : ''
+    );
+    setEmpRemovePhoto(false);
     setEmpForm({
       display_name: prof.display_name || '',
       phone_number: formatPhoneMask(prof.phone_number || ''),
@@ -126,6 +140,20 @@ export default function AdminTeamPage() {
       is_active: Boolean(prof.is_active),
     });
     setEmpModalOpen(true);
+  };
+
+  const handleEmpPhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEmpPhotoFile(file);
+    setEmpRemovePhoto(false);
+    setEmpPhotoPreview(URL.createObjectURL(file));
+  };
+
+  const handleClearEmpPhoto = () => {
+    setEmpPhotoFile(null);
+    setEmpPhotoPreview('');
+    setEmpRemovePhoto(true);
   };
 
   const toggleServiceInForm = (serviceId) => {
@@ -147,33 +175,50 @@ export default function AdminTeamPage() {
     setEmpFormError('');
     setFeedback('');
 
-    const payload = {
-      display_name: empForm.display_name.trim(),
-      phone_number: empForm.phone_number,
-      username: empForm.username.trim().toLowerCase(),
-      email: empForm.email.trim() || '',
-      bio: empForm.bio.trim(),
-      service_comission_rate: Number(
-        empForm.service_comission_rate || 0
-      ).toFixed(2),
-      product_comission_rate: Number(
-        empForm.product_comission_rate || 0
-      ).toFixed(2),
-      slot_interval_minutes: Number(empForm.slot_interval_minutes) || 30,
-      buffer_time_minutes: Number(empForm.buffer_time_minutes) || 0,
-      services: empForm.services,
-      is_active: Boolean(empForm.is_active),
-    };
+    const fd = new FormData();
+    fd.append('display_name', empForm.display_name.trim());
+    fd.append('phone_number', empForm.phone_number);
+    fd.append('username', empForm.username.trim().toLowerCase());
+    fd.append('email', empForm.email.trim() || '');
+    fd.append('bio', empForm.bio.trim());
+    fd.append(
+      'service_comission_rate',
+      Number(empForm.service_comission_rate || 0).toFixed(2)
+    );
+    fd.append(
+      'product_comission_rate',
+      Number(empForm.product_comission_rate || 0).toFixed(2)
+    );
+    fd.append(
+      'slot_interval_minutes',
+      String(Number(empForm.slot_interval_minutes) || 30)
+    );
+    fd.append(
+      'buffer_time_minutes',
+      String(Number(empForm.buffer_time_minutes) || 0)
+    );
+    fd.append('is_active', empForm.is_active ? 'true' : 'false');
+
+    if (empForm.services.length > 0) {
+      empForm.services.forEach((id) => fd.append('services', String(id)));
+    } else {
+      fd.append('clear_services', 'true');
+    }
 
     if (empForm.password.trim()) {
-      payload.password = empForm.password.trim();
+      fd.append('password', empForm.password.trim());
+    }
+    if (empPhotoFile) {
+      fd.append('profile_picture', empPhotoFile);
+    } else if (empRemovePhoto) {
+      fd.append('remove_image', 'true');
     }
 
     try {
       if (editingMember) {
-        await api.patch(`/api/admin/professionals/${editingMember.id}/`, payload);
+        await api.patch(`/api/admin/professionals/${editingMember.id}/`, fd);
       } else {
-        await api.post('/api/admin/professionals/', payload);
+        await api.post('/api/admin/professionals/', fd);
       }
       setEmpModalOpen(false);
       await loadData();
@@ -336,17 +381,34 @@ export default function AdminTeamPage() {
           >
             <div>
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-bold text-[#F8FAFC]">
-                    {p.display_name}
-                  </h3>
-                  <p className="mt-0.5 text-xs text-[#94A3B8]">
-                    Usuário:{' '}
-                    <strong className="font-mono text-[#F59E0B]">
-                      @{p.username}
-                    </strong>{' '}
-                    • {formatPhoneMask(p.phone_number)}
-                  </p>
+                <div className="flex items-center gap-3">
+                  {p.profile_picture ? (
+                    <img
+                      src={resolveMediaUrl(p.profile_picture)}
+                      alt={p.display_name}
+                      className="h-12 w-12 shrink-0 rounded-xl border border-[#D97706]/40 object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#232730] bg-[#0B0D10] font-display text-sm font-bold text-[#F59E0B]">
+                      {p.display_name
+                        .split(' ')
+                        .slice(0, 2)
+                        .map((w) => w[0])
+                        .join('')}
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-base font-bold text-[#F8FAFC]">
+                      {p.display_name}
+                    </h3>
+                    <p className="mt-0.5 text-xs text-[#94A3B8]">
+                      Usuário:{' '}
+                      <strong className="font-mono text-[#F59E0B]">
+                        @{p.username}
+                      </strong>{' '}
+                      • {formatPhoneMask(p.phone_number)}
+                    </p>
+                  </div>
                 </div>
                 <SpellBadge variant={p.is_active ? 'emerald' : 'rose'} size="sm">
                   {p.is_active ? 'Ativo' : 'Inativo'}
@@ -491,6 +553,51 @@ export default function AdminTeamPage() {
               {empFormError}
             </div>
           ) : null}
+
+          {/* Upload de Foto do Barbeiro (Reflete na Landing Page e no Agendamento) */}
+          <div className="flex flex-col gap-3 rounded-xl border border-[#232730] bg-[#0B0D10] p-3.5 sm:flex-row sm:items-center">
+            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#232730] bg-[#14171D]">
+              {empPhotoPreview ? (
+                <img
+                  src={empPhotoPreview}
+                  alt="Preview do profissional"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-[#94A3B8]">
+                  <ImagePlus className="h-6 w-6" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1">
+              <label
+                htmlFor="emp-photo"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Foto do Profissional (atualiza na Landing Page e no Agendamento)
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="emp-photo"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleEmpPhotoChange}
+                  className="block max-w-full text-xs text-[#94A3B8] file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#D97706] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0B0D10] hover:file:bg-[#F59E0B]"
+                />
+                {empPhotoPreview ? (
+                  <button
+                    type="button"
+                    onClick={handleClearEmpPhoto}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20"
+                  >
+                    <X className="h-3 w-3" />
+                    Remover foto
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>

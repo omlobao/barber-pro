@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Edit3,
+  ImagePlus,
   PauseCircle,
   PlayCircle,
   Plus,
   Search,
   Star,
   Trash2,
+  X,
 } from 'lucide-react';
 import api from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
@@ -17,6 +19,7 @@ import {
   CATEGORY_LABELS,
   extractErrorMessage,
   formatCurrency,
+  resolveMediaUrl,
 } from '@/utils/formatters';
 
 const EMPTY_SRV_FORM = {
@@ -55,6 +58,9 @@ export default function AdminCatalogPage() {
   const [srvModalOpen, setSrvModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
   const [srvForm, setSrvForm] = useState(EMPTY_SRV_FORM);
+  const [srvImageFile, setSrvImageFile] = useState(null);
+  const [srvImagePreview, setSrvImagePreview] = useState('');
+  const [srvRemoveImage, setSrvRemoveImage] = useState(false);
   const [srvFormError, setSrvFormError] = useState('');
   const [savingSrv, setSavingSrv] = useState(false);
 
@@ -62,6 +68,9 @@ export default function AdminCatalogPage() {
   const [prodModalOpen, setProdModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [prodForm, setProdForm] = useState(EMPTY_PROD_FORM);
+  const [prodImageFile, setProdImageFile] = useState(null);
+  const [prodImagePreview, setProdImagePreview] = useState('');
+  const [prodRemoveImage, setProdRemoveImage] = useState(false);
   const [prodFormError, setProdFormError] = useState('');
   const [savingProd, setSavingProd] = useState(false);
 
@@ -111,6 +120,9 @@ export default function AdminCatalogPage() {
   const openCreateService = () => {
     setEditingService(null);
     setSrvForm(EMPTY_SRV_FORM);
+    setSrvImageFile(null);
+    setSrvImagePreview('');
+    setSrvRemoveImage(false);
     setSrvFormError('');
     setSrvModalOpen(true);
   };
@@ -118,6 +130,9 @@ export default function AdminCatalogPage() {
   const openEditService = (srv) => {
     setEditingService(srv);
     setSrvFormError('');
+    setSrvImageFile(null);
+    setSrvImagePreview(srv.image ? resolveMediaUrl(srv.image) : '');
+    setSrvRemoveImage(false);
     setSrvForm({
       name: srv.name || '',
       category: srv.category || 'HAIR',
@@ -140,25 +155,31 @@ export default function AdminCatalogPage() {
     setSavingSrv(true);
     setSrvFormError('');
 
-    const payload = {
-      name: srvForm.name.trim(),
-      category: srvForm.category,
-      description: srvForm.description.trim(),
-      price: Number(srvForm.price).toFixed(2),
-      promotion_price: srvForm.promotion_price
-        ? Number(srvForm.promotion_price).toFixed(2)
-        : null,
-      duration_minutes: Number(srvForm.duration_minutes) || 30,
-      display_order: Number(srvForm.display_order) || 0,
-      is_featured: Boolean(srvForm.is_featured),
-      is_active: Boolean(srvForm.is_active),
-    };
+    const fd = new FormData();
+    fd.append('name', srvForm.name.trim());
+    fd.append('category', srvForm.category);
+    fd.append('description', srvForm.description.trim());
+    fd.append('price', Number(srvForm.price).toFixed(2));
+    fd.append(
+      'promotion_price',
+      srvForm.promotion_price ? Number(srvForm.promotion_price).toFixed(2) : ''
+    );
+    fd.append('duration_minutes', String(Number(srvForm.duration_minutes) || 30));
+    fd.append('display_order', String(Number(srvForm.display_order) || 0));
+    fd.append('is_featured', srvForm.is_featured ? 'true' : 'false');
+    fd.append('is_active', srvForm.is_active ? 'true' : 'false');
+
+    if (srvImageFile) {
+      fd.append('image', srvImageFile);
+    } else if (srvRemoveImage) {
+      fd.append('remove_image', 'true');
+    }
 
     try {
       if (editingService) {
-        await api.patch(`/api/admin/services/${editingService.id}/`, payload);
+        await api.patch(`/api/admin/services/${editingService.id}/`, fd);
       } else {
-        await api.post('/api/admin/services/', payload);
+        await api.post('/api/admin/services/', fd);
       }
       setSrvModalOpen(false);
       await loadCatalog();
@@ -187,6 +208,9 @@ export default function AdminCatalogPage() {
   const openCreateProduct = () => {
     setEditingProduct(null);
     setProdForm(EMPTY_PROD_FORM);
+    setProdImageFile(null);
+    setProdImagePreview('');
+    setProdRemoveImage(false);
     setProdFormError('');
     setProdModalOpen(true);
   };
@@ -194,6 +218,9 @@ export default function AdminCatalogPage() {
   const openEditProduct = (prod) => {
     setEditingProduct(prod);
     setProdFormError('');
+    setProdImageFile(null);
+    setProdImagePreview(prod.image ? resolveMediaUrl(prod.image) : '');
+    setProdRemoveImage(false);
     setProdForm({
       name: prod.name || '',
       sku: prod.sku || '',
@@ -212,24 +239,28 @@ export default function AdminCatalogPage() {
     setSavingProd(true);
     setProdFormError('');
 
-    const payload = {
-      name: prodForm.name.trim(),
-      description: prodForm.description.trim(),
-      cost_price: Number(prodForm.cost_price || 0).toFixed(2),
-      sale_price: Number(prodForm.sale_price).toFixed(2),
-      stock_quantity: Number(prodForm.stock_quantity),
-      min_stock_alert: Number(prodForm.min_stock_alert),
-      is_active: Boolean(prodForm.is_active),
-    };
+    const fd = new FormData();
+    fd.append('name', prodForm.name.trim());
+    fd.append('description', prodForm.description.trim());
+    fd.append('cost_price', Number(prodForm.cost_price || 0).toFixed(2));
+    fd.append('sale_price', Number(prodForm.sale_price).toFixed(2));
+    fd.append('stock_quantity', String(Number(prodForm.stock_quantity)));
+    fd.append('min_stock_alert', String(Number(prodForm.min_stock_alert)));
+    fd.append('is_active', prodForm.is_active ? 'true' : 'false');
     if (prodForm.sku.trim()) {
-      payload.sku = prodForm.sku.trim().toUpperCase();
+      fd.append('sku', prodForm.sku.trim().toUpperCase());
+    }
+    if (prodImageFile) {
+      fd.append('image', prodImageFile);
+    } else if (prodRemoveImage) {
+      fd.append('remove_image', 'true');
     }
 
     try {
       if (editingProduct) {
-        await api.patch(`/api/admin/products/${editingProduct.id}/`, payload);
+        await api.patch(`/api/admin/products/${editingProduct.id}/`, fd);
       } else {
-        await api.post('/api/admin/products/', payload);
+        await api.post('/api/admin/products/', fd);
       }
       setProdModalOpen(false);
       await loadCatalog();
@@ -419,14 +450,25 @@ export default function AdminCatalogPage() {
                   </SpellBadge>
                 </div>
 
-                <h3 className="mt-3 text-base font-bold text-[#F8FAFC]">
-                  {s.name}
-                </h3>
-                {s.description ? (
-                  <p className="mt-1 line-clamp-2 text-xs text-[#94A3B8]">
-                    {s.description}
-                  </p>
-                ) : null}
+                <div className="mt-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-[#F8FAFC]">
+                      {s.name}
+                    </h3>
+                    {s.description ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-[#94A3B8]">
+                        {s.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  {s.image ? (
+                    <img
+                      src={resolveMediaUrl(s.image)}
+                      alt={s.name}
+                      className="h-14 w-14 shrink-0 rounded-xl border border-[#D97706]/40 object-cover"
+                    />
+                  ) : null}
+                </div>
                 <p className="mt-2 text-xs text-[#94A3B8]">
                   Duração: <strong className="text-[#F8FAFC]">{s.duration_minutes} min</strong>
                 </p>
@@ -519,14 +561,25 @@ export default function AdminCatalogPage() {
                   </div>
                 </div>
 
-                <h3 className="mt-3 text-base font-bold text-[#F8FAFC]">
-                  {p.name}
-                </h3>
-                {p.description ? (
-                  <p className="mt-1 line-clamp-2 text-xs text-[#94A3B8]">
-                    {p.description}
-                  </p>
-                ) : null}
+                <div className="mt-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-[#F8FAFC]">
+                      {p.name}
+                    </h3>
+                    {p.description ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-[#94A3B8]">
+                        {p.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  {p.image ? (
+                    <img
+                      src={resolveMediaUrl(p.image)}
+                      alt={p.name}
+                      className="h-12 w-12 shrink-0 rounded-xl border border-[#232730] object-cover"
+                    />
+                  ) : null}
+                </div>
                 <p className="mt-2 text-xs text-[#94A3B8]">
                   Custo: {formatCurrency(p.cost_price)} • Venda:{' '}
                   <strong className="text-[#F59E0B]">
@@ -627,6 +680,61 @@ export default function AdminCatalogPage() {
               {srvFormError}
             </div>
           ) : null}
+
+          {/* Upload de Foto do Serviço (Reflete na Landing Page) */}
+          <div className="flex flex-col gap-3 rounded-xl border border-[#232730] bg-[#0B0D10] p-3.5 sm:flex-row sm:items-center">
+            <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#232730] bg-[#14171D]">
+              {srvImagePreview ? (
+                <img
+                  src={srvImagePreview}
+                  alt="Preview do serviço"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-[#94A3B8]">
+                  <ImagePlus className="h-6 w-6" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1">
+              <label
+                htmlFor="srv-image"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Foto do Serviço (atualiza direto no Menu da Landing Page)
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="srv-image"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setSrvImageFile(file);
+                    setSrvRemoveImage(false);
+                    setSrvImagePreview(URL.createObjectURL(file));
+                  }}
+                  className="block max-w-full text-xs text-[#94A3B8] file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#D97706] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0B0D10] hover:file:bg-[#F59E0B]"
+                />
+                {srvImagePreview ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSrvImageFile(null);
+                      setSrvImagePreview('');
+                      setSrvRemoveImage(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20"
+                  >
+                    <X className="h-3 w-3" />
+                    Remover foto
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
 
           <div>
             <label
@@ -853,6 +961,61 @@ export default function AdminCatalogPage() {
               {prodFormError}
             </div>
           ) : null}
+
+          {/* Upload de Foto do Produto */}
+          <div className="flex flex-col gap-3 rounded-xl border border-[#232730] bg-[#0B0D10] p-3.5 sm:flex-row sm:items-center">
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-[#232730] bg-[#14171D]">
+              {prodImagePreview ? (
+                <img
+                  src={prodImagePreview}
+                  alt="Preview do produto"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-[#94A3B8]">
+                  <ImagePlus className="h-5 w-5" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1">
+              <label
+                htmlFor="prod-image"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Foto do Produto (opcional)
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="prod-image"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setProdImageFile(file);
+                    setProdRemoveImage(false);
+                    setProdImagePreview(URL.createObjectURL(file));
+                  }}
+                  className="block max-w-full text-xs text-[#94A3B8] file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#D97706] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#0B0D10] hover:file:bg-[#F59E0B]"
+                />
+                {prodImagePreview ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProdImageFile(null);
+                      setProdImagePreview('');
+                      setProdRemoveImage(true);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20"
+                  >
+                    <X className="h-3 w-3" />
+                    Remover
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="sm:col-span-2">

@@ -10,6 +10,11 @@ class ServiceSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
+    remove_image = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
 
     class Meta:
         model = Service
@@ -24,6 +29,7 @@ class ServiceSerializer(serializers.ModelSerializer):
             'effective_price',
             'duration_minutes',
             'image',
+            'remove_image',
             'is_featured',
             'display_order',
             'is_active',
@@ -32,13 +38,28 @@ class ServiceSerializer(serializers.ModelSerializer):
             'slug': {'required': False, 'allow_blank': True},
         }
 
+    def to_internal_value(self, data):
+        if hasattr(data, 'copy'):
+            mutable = data.copy()
+        else:
+            mutable = dict(data)
+        if mutable.get('promotion_price') == '':
+            mutable['promotion_price'] = None
+        return super().to_internal_value(mutable)
+
     def create(self, validated_data):
+        validated_data.pop('remove_image', None)
         try:
             return super().create(validated_data)
         except DjangoValidationError as exc:
             raise serializers.ValidationError({'detail': exc.messages})
 
     def update(self, instance, validated_data):
+        remove_img = validated_data.pop('remove_image', False)
+        if remove_img and 'image' not in validated_data:
+            if instance.image:
+                instance.image.delete(save=False)
+            validated_data['image'] = None
         try:
             return super().update(instance, validated_data)
         except DjangoValidationError as exc:
@@ -47,6 +68,11 @@ class ServiceSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     is_low_stock = serializers.SerializerMethodField()
+    remove_image = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
 
     class Meta:
         model = Product
@@ -61,6 +87,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'min_stock_alert',
             'is_low_stock',
             'image',
+            'remove_image',
             'is_active',
         ]
         extra_kwargs = {
@@ -71,12 +98,18 @@ class ProductSerializer(serializers.ModelSerializer):
         return obj.stock_quantity <= obj.min_stock_alert
 
     def create(self, validated_data):
+        validated_data.pop('remove_image', None)
         try:
             return super().create(validated_data)
         except DjangoValidationError as exc:
             raise serializers.ValidationError({'detail': exc.messages})
 
     def update(self, instance, validated_data):
+        remove_img = validated_data.pop('remove_image', False)
+        if remove_img and 'image' not in validated_data:
+            if instance.image:
+                instance.image.delete(save=False)
+            validated_data['image'] = None
         try:
             return super().update(instance, validated_data)
         except DjangoValidationError as exc:

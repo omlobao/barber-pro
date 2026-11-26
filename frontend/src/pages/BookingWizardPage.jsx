@@ -35,6 +35,7 @@ import {
   formatPhoneMask,
   getNextDays,
   groupSlotsByPeriod,
+  resolveMediaUrl,
 } from '@/utils/formatters';
 
 const STEPS = [
@@ -721,13 +722,21 @@ export default function BookingWizardPage() {
                             : 'border-[#232730] bg-[#14171D] hover:border-[#D97706]/40'
                         }`}
                       >
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[#232730] bg-[#0B0D10] font-display text-lg font-bold text-[#F59E0B]">
-                          {prof.display_name
-                            .split(' ')
-                            .slice(0, 2)
-                            .map((w) => w[0])
-                            .join('')}
-                        </div>
+                        {prof.profile_picture ? (
+                          <img
+                            src={resolveMediaUrl(prof.profile_picture)}
+                            alt={prof.display_name}
+                            className="h-14 w-14 shrink-0 rounded-2xl border border-[#D97706]/40 object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[#232730] bg-[#0B0D10] font-display text-lg font-bold text-[#F59E0B]">
+                            {prof.display_name
+                              .split(' ')
+                              .slice(0, 2)
+                              .map((w) => w[0])
+                              .join('')}
+                          </div>
+                        )}
                         <div>
                           <h3 className="text-base font-bold text-[#F8FAFC]">
                             {prof.display_name}

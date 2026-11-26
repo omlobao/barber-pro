@@ -1,9 +1,12 @@
 from datetime import date, time
+import io
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from PIL import Image
 from rest_framework.test import APIClient
 
 from catalog.models import Service
@@ -111,3 +114,25 @@ class ProfessionalsModelAndAPITests(TestCase):
         self.assertEqual(login_resp.status_code, 200)
         self.assertEqual(login_resp.data['account_type'], 'STAFF')
         self.assertEqual(login_resp.data['user']['role'], 'PROFESSIONAL')
+
+        # Upload de foto de perfil via multipart e reflexo na API pública
+        buf = io.BytesIO()
+        Image.new('RGB', (60, 60), color=(20, 23, 29)).save(buf, format='JPEG')
+        photo = SimpleUploadedFile(
+            'barbeiro.jpg',
+            buf.getvalue(),
+            content_type='image/jpeg',
+        )
+        prof_id = resp.data['id']
+        patch_resp = self.api.patch(
+            reverse('admin-professionals-detail', args=[prof_id]),
+            {'profile_picture': photo},
+            format='multipart',
+        )
+        self.assertEqual(patch_resp.status_code, 200)
+        self.assertTrue(bool(patch_resp.data['profile_picture']))
+
+        pub_resp = APIClient().get(reverse('public-professionals-list'))
+        self.assertEqual(pub_resp.status_code, 200)
+        matched = [p for p in pub_resp.data if p['id'] == prof_id][0]
+        self.assertTrue(bool(matched['profile_picture']))

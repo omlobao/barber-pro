@@ -114,6 +114,16 @@ class AdminProfessionalSerializer(serializers.ModelSerializer):
         allow_blank=True,
         min_length=6,
     )
+    remove_image = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
+    clear_services = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
 
     class Meta:
         model = Professional
@@ -127,8 +137,10 @@ class AdminProfessionalSerializer(serializers.ModelSerializer):
             'slug',
             'bio',
             'profile_picture',
+            'remove_image',
             'phone_number',
             'services',
+            'clear_services',
             'service_comission_rate',
             'product_comission_rate',
             'slot_interval_minutes',
@@ -214,6 +226,8 @@ class AdminProfessionalSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        validated_data.pop('remove_image', None)
+        clear_services = validated_data.pop('clear_services', False)
         username = validated_data.pop('username', '')
         email = validated_data.pop('email', '') or ''
         password = validated_data.pop('password', '')
@@ -243,7 +257,9 @@ class AdminProfessionalSerializer(serializers.ModelSerializer):
 
         professional = Professional.objects.create(**validated_data)
 
-        if services is not None:
+        if clear_services:
+            professional.services.clear()
+        elif services is not None:
             professional.services.set(services)
         else:
             professional.services.set(Service.objects.filter(is_active=True))
@@ -265,10 +281,17 @@ class AdminProfessionalSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        remove_img = validated_data.pop('remove_image', False)
+        clear_services = validated_data.pop('clear_services', False)
         username = validated_data.pop('username', None)
         email = validated_data.pop('email', None)
         password = validated_data.pop('password', '')
         services = validated_data.pop('services', None)
+
+        if remove_img and 'profile_picture' not in validated_data:
+            if instance.profile_picture:
+                instance.profile_picture.delete(save=False)
+            validated_data['profile_picture'] = None
 
         if 'slug' in validated_data:
             raw_slug = validated_data.pop('slug')
@@ -282,7 +305,9 @@ class AdminProfessionalSerializer(serializers.ModelSerializer):
             setattr(instance, attr, val)
         instance.save()
 
-        if services is not None:
+        if clear_services:
+            instance.services.clear()
+        elif services is not None:
             instance.services.set(services)
 
         if instance.user_id:

@@ -28,6 +28,7 @@ import {
   CATEGORY_LABELS,
   SERVICE_CATEGORIES,
   formatCurrency,
+  resolveMediaUrl,
 } from '@/utils/formatters';
 
 const WHATSAPP_URL =
@@ -139,7 +140,7 @@ const BARBER_PORTRAIT_FALLBACKS = [
 ];
 
 function getServiceImage(service, index) {
-  if (service.image) return service.image;
+  if (service.image) return resolveMediaUrl(service.image);
   const cat = service.category;
   const slug = (service.slug || '').toLowerCase();
 
@@ -785,11 +786,11 @@ export default function LandingPage() {
           ) : (
             <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {professionals.map((prof, index) => {
-                const portraitSrc =
-                  prof.profile_picture ||
-                  BARBER_PORTRAIT_FALLBACKS[
-                    index % BARBER_PORTRAIT_FALLBACKS.length
-                  ];
+                const portraitSrc = prof.profile_picture
+                  ? resolveMediaUrl(prof.profile_picture)
+                  : BARBER_PORTRAIT_FALLBACKS[
+                      index % BARBER_PORTRAIT_FALLBACKS.length
+                    ];
 
                 return (
                   <motion.div

@@ -1,9 +1,12 @@
 from decimal import Decimal
+import io
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from PIL import Image
 from rest_framework.test import APIClient
 
 from clients.models import Client
@@ -137,3 +140,38 @@ class CatalogModelAndAPITests(TestCase):
         )
         self.assertEqual(prod_resp.status_code, 200)
         self.assertFalse(prod_resp.data['is_active'])
+
+    def test_service_multipart_image_upload_and_removal(self):
+        buf = io.BytesIO()
+        img = Image.new('RGB', (60, 60), color=(217, 119, 6))
+        img.save(buf, format='JPEG')
+        uploaded = SimpleUploadedFile(
+            'corte.jpg',
+            buf.getvalue(),
+            content_type='image/jpeg',
+        )
+
+        create_resp = self.api.post(
+            reverse('admin-services-list'),
+            {
+                'name': 'Corte com Foto',
+                'category': 'HAIR',
+                'price': '70.00',
+                'promotion_price': '',
+                'duration_minutes': '45',
+                'image': uploaded,
+            },
+            format='multipart',
+        )
+        self.assertEqual(create_resp.status_code, 201)
+        self.assertTrue(bool(create_resp.data['image']))
+        srv_id = create_resp.data['id']
+
+        # Remove a foto enviada
+        clear_resp = self.api.patch(
+            reverse('admin-services-detail', args=[srv_id]),
+            {'remove_image': 'true'},
+            format='multipart',
+        )
+        self.assertEqual(clear_resp.status_code, 200)
+        self.assertIsNone(clear_resp.data['image'])

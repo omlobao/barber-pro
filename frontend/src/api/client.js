@@ -29,6 +29,9 @@ export function setStoredTokens(tokens) {
 }
 
 api.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
   const tokens = getStoredTokens();
   if (tokens?.access && !config.url?.includes('/api/public/') && !config.url?.includes('/api/auth/login/')) {
     config.headers.Authorization = `Bearer ${tokens.access}`;

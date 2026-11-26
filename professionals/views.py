@@ -3,6 +3,7 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
@@ -95,6 +96,7 @@ class AdminProfessionalViewSet(viewsets.ModelViewSet):
     )
     serializer_class = AdminProfessionalSerializer
     permission_classes = [IsBarberShopStaff, IsOwnerOrReadOnly]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(
         tags=[PROFESSIONALS_TAG],
