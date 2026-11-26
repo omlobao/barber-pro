@@ -3,7 +3,7 @@ from datetime import time, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -21,6 +21,7 @@ from .models import (
     WhatsAppMessage,
     WhatsAppSettings,
 )
+from .views import _build_evolution_webhook_url
 
 
 class WhatsAppCRMTests(TestCase):
@@ -237,3 +238,24 @@ class WhatsAppCRMTests(TestCase):
         )
         self.assertEqual(fire_resp.status_code, 200)
         self.assertEqual(fire_resp.data['campaign']['recipients_count'], 1)
+
+    @override_settings(EVOLUTION_WEBHOOK_BASE_URL='')
+    def test_webhook_url_builder_rewrites_localhost_for_docker(self):
+        factory = RequestFactory()
+        req = factory.get(
+            '/api/admin/whatsapp/qrcode/',
+            HTTP_HOST='localhost:5173',
+        )
+        self.cfg.api_url = 'http://127.0.0.1:4000'
+        local_url = _build_evolution_webhook_url(req, self.cfg)
+        self.assertTrue(
+            local_url.startswith(
+                'http://host.docker.internal:8000/webhook/whatsapp/'
+            )
+        )
+
+        self.cfg.api_url = 'https://evo.barberpro.com.br'
+        remote_url = _build_evolution_webhook_url(req, self.cfg)
+        self.assertTrue(
+            remote_url.startswith('http://localhost:5173/webhook/whatsapp/')
+        )

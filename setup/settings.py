@@ -19,7 +19,7 @@ ALLOWED_HOSTS = [
     h.strip()
     for h in os.environ.get(
         'DJANGO_ALLOWED_HOSTS',
-        'localhost,127.0.0.1,0.0.0.0',
+        'localhost,127.0.0.1,0.0.0.0,host.docker.internal',
     ).split(',')
     if h.strip()
 ]
@@ -269,6 +269,10 @@ EVOLUTION_INSTANCE_NAME = os.environ.get(
     'barberpro',
 )
 EVOLUTION_WEBHOOK_TOKEN = os.environ.get('EVOLUTION_WEBHOOK_TOKEN', '')
+EVOLUTION_WEBHOOK_BASE_URL = os.environ.get(
+    'EVOLUTION_WEBHOOK_BASE_URL',
+    '',
+)
 EVOLUTION_TIMEOUT = int(os.environ.get('EVOLUTION_TIMEOUT', '8'))
 PUBLIC_BOOKING_URL = os.environ.get(
     'PUBLIC_BOOKING_URL',

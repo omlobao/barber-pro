@@ -4,9 +4,11 @@ import hashlib
 import hmac
 import json
 import logging
-from urllib.parse import quote
+import time
+from urllib.parse import quote, urlparse
 from uuid import uuid4
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Max, Q, Sum
 from django.http import HttpResponse, HttpResponseForbidden
@@ -794,6 +796,39 @@ class WhatsAppSettingsView(APIView):
         return Response(serializer.data)
 
 
+def _build_evolution_webhook_url(request, cfg) -> str:
+    """Monta a URL do webhook alcançável pelo container ou servidor remoto."""
+    path = f'/webhook/whatsapp/{cfg.effective_webhook_token()}/'
+    custom_base = str(
+        getattr(settings, 'EVOLUTION_WEBHOOK_BASE_URL', '') or ''
+    ).strip().rstrip('/')
+    if custom_base:
+        return f'{custom_base}{path}'
+
+    raw_url = request.build_absolute_uri(path)
+    api_host = (urlparse(cfg.effective_api_url()).hostname or '').lower()
+    req_host = (urlparse(raw_url).hostname or '').lower()
+    if (
+        api_host in {'127.0.0.1', 'localhost'}
+        and req_host in {'127.0.0.1', 'localhost'}
+    ):
+        return f'http://host.docker.internal:8000{path}'
+    return raw_url
+
+
+def _extract_qr_image(qr_payload) -> str:
+    data = (
+        qr_payload.get('data', qr_payload)
+        if isinstance(qr_payload, dict)
+        else {}
+    )
+    if not isinstance(data, dict):
+        return ''
+    return str(
+        data.get('qrcode') or data.get('base64') or data.get('code') or ''
+    )
+
+
 @extend_schema(tags=[WHATSAPP_TAG], responses={200: OpenApiTypes.OBJECT})
 class WhatsAppQRCodeView(APIView):
     """Consulta status da instância Evolution GO ou emite QR Code."""
@@ -820,9 +855,7 @@ class WhatsAppQRCodeView(APIView):
 
         try:
             if cfg.provider == 'evolution_go':
-                webhook_url = request.build_absolute_uri(
-                    f'/webhook/whatsapp/{cfg.effective_webhook_token()}/'
-                )
+                webhook_url = _build_evolution_webhook_url(request, cfg)
                 try:
                     evo.configure_webhook(webhook_url)
                 except EvolutionProviderError:
@@ -841,17 +874,12 @@ class WhatsAppQRCodeView(APIView):
                 pass
 
             qr_payload = evo.qr(instance=instance)
-            data = (
-                qr_payload.get('data', qr_payload)
-                if isinstance(qr_payload, dict)
-                else {}
-            )
-            base64_img = (
-                data.get('qrcode')
-                or data.get('base64')
-                or data.get('code')
-                or ''
-            )
+            base64_img = _extract_qr_image(qr_payload)
+            if not base64_img:
+                time.sleep(1)
+                qr_payload = evo.qr(instance=instance)
+                base64_img = _extract_qr_image(qr_payload)
+
             if base64_img:
                 return Response({
                     'success': True,
