@@ -260,7 +260,10 @@ export default function LandingPage() {
                     <button
                       key={cat.value}
                       type="button"
-                      onClick={() => setSelectedCategory(cat.value)}
+                      aria-pressed={active}
+                      onClick={() => {
+                        if (!active) setSelectedCategory(cat.value);
+                      }}
                       className={`min-h-[44px] shrink-0 rounded-xl px-4 text-xs font-bold tracking-wide transition ${
                         active
                           ? 'bg-[#D97706] text-[#0B0D10] shadow-md shadow-[#D97706]/25'
@@ -286,17 +289,8 @@ export default function LandingPage() {
               Nenhum serviço encontrado nesta categoria no momento.
             </div>
           ) : (
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.1 }}
-              variants={{
-                hidden: {},
-                visible: { transition: { staggerChildren: 0.08 } },
-              }}
-              className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
-            >
-              {filteredServices.map((service) => {
+            <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {filteredServices.map((service, index) => {
                 const promoPrice =
                   service.promotion_price ?? service.promotional_price;
                 const hasPromo =
@@ -306,10 +300,13 @@ export default function LandingPage() {
 
                 return (
                   <motion.div
-                    key={service.id}
-                    variants={{
-                      hidden: { opacity: 0, y: 22 },
-                      visible: { opacity: 1, y: 0 },
+                    key={`${selectedCategory}-${service.id}`}
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{
+                      duration: 0.24,
+                      delay: index * 0.04,
+                      ease: 'easeOut',
                     }}
                     whileHover={{ y: -3 }}
                   >
@@ -382,7 +379,7 @@ export default function LandingPage() {
                   </motion.div>
                 );
               })}
-            </motion.div>
+            </div>
           )}
         </div>
       </section>
@@ -413,22 +410,17 @@ export default function LandingPage() {
               ))}
             </div>
           ) : (
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, amount: 0.15 }}
-              variants={{
-                hidden: {},
-                visible: { transition: { staggerChildren: 0.1 } },
-              }}
-              className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
-            >
-              {professionals.map((prof) => (
+            <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {professionals.map((prof, index) => (
                 <motion.div
                   key={prof.id}
-                  variants={{
-                    hidden: { opacity: 0, y: 24 },
-                    visible: { opacity: 1, y: 0 },
+                  initial={{ opacity: 0, y: 22 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.1 }}
+                  transition={{
+                    duration: 0.35,
+                    delay: index * 0.08,
+                    ease: 'easeOut',
                   }}
                 >
                   <TiltCard
@@ -477,7 +469,7 @@ export default function LandingPage() {
                   </TiltCard>
                 </motion.div>
               ))}
-            </motion.div>
+            </div>
           )}
         </div>
       </section>
