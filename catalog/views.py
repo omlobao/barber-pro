@@ -1,12 +1,14 @@
 from django.db import models
+from django.db.models.deletion import ProtectedError
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
     extend_schema,
     extend_schema_view,
 )
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 
 from core.permissions import IsBarberShopStaff, IsOwnerOrReadOnly
 from .models import Coupon, Product, Service
@@ -97,6 +99,20 @@ class AdminServiceViewSet(viewsets.ModelViewSet):
     serializer_class = ServiceSerializer
     permission_classes = [IsBarberShopStaff, IsOwnerOrReadOnly]
 
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {
+                    'detail': (
+                        'Este serviço já possui histórico de agendamentos ou '
+                        'comandas. Inative-o em vez de excluir.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
 
 @extend_schema_view(
     list=extend_schema(
@@ -163,6 +179,20 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('is_low_stock') == 'true':
             qs = qs.filter(stock_quantity__lte=models.F('min_stock_alert'))
         return qs
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {
+                    'detail': (
+                        'Este produto já possui vendas registradas em '
+                        'comandas. Inative-o em vez de excluir.'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 @extend_schema_view(

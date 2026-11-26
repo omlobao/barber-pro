@@ -28,6 +28,21 @@ class ServiceSerializer(serializers.ModelSerializer):
             'display_order',
             'is_active',
         ]
+        extra_kwargs = {
+            'slug': {'required': False, 'allow_blank': True},
+        }
+
+    def create(self, validated_data):
+        try:
+            return super().create(validated_data)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'detail': exc.messages})
+
+    def update(self, instance, validated_data):
+        try:
+            return super().update(instance, validated_data)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'detail': exc.messages})
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -48,9 +63,24 @@ class ProductSerializer(serializers.ModelSerializer):
             'image',
             'is_active',
         ]
+        extra_kwargs = {
+            'sku': {'required': False, 'allow_blank': True},
+        }
 
     def get_is_low_stock(self, obj) -> bool:
         return obj.stock_quantity <= obj.min_stock_alert
+
+    def create(self, validated_data):
+        try:
+            return super().create(validated_data)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'detail': exc.messages})
+
+    def update(self, instance, validated_data):
+        try:
+            return super().update(instance, validated_data)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'detail': exc.messages})
 
 
 class CouponSerializer(serializers.ModelSerializer):

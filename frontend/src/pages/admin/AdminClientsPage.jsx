@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Ban, CheckCircle2, Plus, Search, UserCheck } from 'lucide-react';
+import {
+  Ban,
+  CheckCircle2,
+  Edit3,
+  Plus,
+  Search,
+  UserCheck,
+} from 'lucide-react';
 import api from '@/api/client';
 import { ModalDialog } from '@/components/ui/ModalDialog';
 import { SpellBadge } from '@/components/spell/SpellBadge';
@@ -17,10 +24,14 @@ export default function AdminClientsPage() {
   const [feedback, setFeedback] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const loadClients = useCallback(async () => {
     try {
@@ -48,24 +59,54 @@ export default function AdminClientsPage() {
     }
   };
 
-  const handleCreateClient = async (e) => {
+  const openCreateModal = () => {
+    setEditingClient(null);
+    setName('');
+    setPhone('');
+    setEmail('');
+    setBirthDate('');
+    setNotes('');
+    setFormError('');
+    setModalOpen(true);
+  };
+
+  const openEditModal = (clientObj) => {
+    setEditingClient(clientObj);
+    setName(clientObj.name || '');
+    setPhone(formatPhoneMask(clientObj.phone_number || ''));
+    setEmail(clientObj.email || '');
+    setBirthDate(clientObj.birth_date || '');
+    setNotes(clientObj.notes || '');
+    setFormError('');
+    setModalOpen(true);
+  };
+
+  const handleSaveClient = async (e) => {
     e.preventDefault();
+    setSaving(true);
+    setFormError('');
     setFeedback('');
+
+    const payload = {
+      name: name.trim(),
+      phone_number: phone,
+      email: email.trim() || null,
+      birth_date: birthDate || null,
+      notes: notes.trim(),
+    };
+
     try {
-      await api.post('/api/admin/clients/', {
-        name: name.trim(),
-        phone_number: phone,
-        email: email.trim(),
-        notes: notes.trim(),
-      });
+      if (editingClient) {
+        await api.patch(`/api/admin/clients/${editingClient.id}/`, payload);
+      } else {
+        await api.post('/api/admin/clients/', payload);
+      }
       setModalOpen(false);
-      setName('');
-      setPhone('');
-      setEmail('');
-      setNotes('');
       await loadClients();
     } catch (err) {
-      setFeedback(extractErrorMessage(err, 'Erro ao cadastrar cliente.'));
+      setFormError(extractErrorMessage(err, 'Erro ao salvar cliente.'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -77,13 +118,14 @@ export default function AdminClientsPage() {
             Clientes (CRM)
           </h1>
           <p className="mt-1 text-sm text-[#94A3B8]">
-            Histórico de fidelidade, faltas sem aviso e controle de bloqueio online.
+            Histórico de fidelidade, dados cadastrais, faltas sem aviso e
+            controle de bloqueio online.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={() => setModalOpen(true)}
+          onClick={openCreateModal}
           className="inline-flex min-h-[46px] items-center gap-2 rounded-xl bg-[#D97706] px-4 text-xs font-bold text-[#0B0D10]"
         >
           <Plus className="h-4 w-4" />
@@ -182,10 +224,11 @@ export default function AdminClientsPage() {
               ) : null}
             </div>
 
-            <div className="mt-5 flex items-center justify-between border-t border-[#232730] pt-3">
+            <div className="mt-5 space-y-3 border-t border-[#232730] pt-3">
               <div className="text-xs text-[#94A3B8]">
-                Visitas: <strong className="text-[#F8FAFC]">{c.total_visits}</strong>{' '}
-                • Faltas:{' '}
+                Visitas:{' '}
+                <strong className="text-[#F8FAFC]">{c.total_visits}</strong> •
+                Faltas:{' '}
                 <strong
                   className={
                     c.no_show_count > 0 ? 'text-orange-400' : 'text-[#F8FAFC]'
@@ -195,27 +238,38 @@ export default function AdminClientsPage() {
                 </strong>
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleToggleBlock(c.id)}
-                className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border px-3 text-xs font-bold ${
-                  c.is_blocked
-                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                    : 'border-rose-500/40 bg-rose-500/10 text-rose-400'
-                }`}
-              >
-                {c.is_blocked ? (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Desbloquear
-                  </>
-                ) : (
-                  <>
-                    <Ban className="h-3.5 w-3.5" />
-                    Bloquear
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEditModal(c)}
+                  className="inline-flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-xs font-bold text-[#F8FAFC] hover:border-[#D97706]/50"
+                >
+                  <Edit3 className="h-3.5 w-3.5 text-[#D97706]" />
+                  Editar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggleBlock(c.id)}
+                  className={`inline-flex min-h-[36px] flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-bold ${
+                    c.is_blocked
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                      : 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+                  }`}
+                >
+                  {c.is_blocked ? (
+                    <>
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Desbloquear
+                    </>
+                  ) : (
+                    <>
+                      <Ban className="h-3.5 w-3.5" />
+                      Bloquear
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -224,9 +278,22 @@ export default function AdminClientsPage() {
       <ModalDialog
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="Cadastrar Novo Cliente"
+        title={
+          editingClient
+            ? `Editar Cliente — ${editingClient.name}`
+            : 'Cadastrar Novo Cliente'
+        }
       >
-        <form onSubmit={handleCreateClient} className="space-y-4">
+        <form onSubmit={handleSaveClient} className="space-y-4">
+          {formError ? (
+            <div
+              role="alert"
+              className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs font-medium text-rose-300"
+            >
+              {formError}
+            </div>
+          ) : null}
+
           <div>
             <label
               htmlFor="cli-name"
@@ -243,23 +310,40 @@ export default function AdminClientsPage() {
               className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
             />
           </div>
-          <div>
-            <label
-              htmlFor="cli-phone"
-              className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
-            >
-              WhatsApp com DDD *
-            </label>
-            <input
-              id="cli-phone"
-              type="tel"
-              inputMode="tel"
-              required
-              placeholder="(11) 99999-9999"
-              value={phone}
-              onChange={(e) => setPhone(formatPhoneMask(e.target.value))}
-              className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
-            />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="cli-phone"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                WhatsApp com DDD *
+              </label>
+              <input
+                id="cli-phone"
+                type="tel"
+                inputMode="tel"
+                required
+                placeholder="(11) 99999-9999"
+                value={phone}
+                onChange={(e) => setPhone(formatPhoneMask(e.target.value))}
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="cli-birth"
+                className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
+              >
+                Data de Nascimento
+              </label>
+              <input
+                id="cli-birth"
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className="h-11 w-full rounded-xl border border-[#232730] bg-[#0B0D10] px-3 text-sm text-[#F8FAFC]"
+              />
+            </div>
           </div>
           <div>
             <label
@@ -281,7 +365,7 @@ export default function AdminClientsPage() {
               htmlFor="cli-notes"
               className="mb-1 block text-xs font-semibold text-[#F8FAFC]"
             >
-              Observações
+              Observações Internas (preferências de corte, etc.)
             </label>
             <textarea
               id="cli-notes"
@@ -301,9 +385,14 @@ export default function AdminClientsPage() {
             </button>
             <button
               type="submit"
+              disabled={saving}
               className="min-h-[44px] rounded-xl bg-[#D97706] px-5 text-xs font-bold text-[#0B0D10]"
             >
-              Salvar Cliente
+              {saving
+                ? 'Salvando...'
+                : editingClient
+                ? 'Salvar Alterações'
+                : 'Salvar Cliente'}
             </button>
           </div>
         </form>

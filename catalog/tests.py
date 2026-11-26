@@ -107,3 +107,33 @@ class CatalogModelAndAPITests(TestCase):
                 Decimal('100.00'),
                 client=returning_client,
             )
+
+    def test_admin_service_and_product_update_via_api(self):
+        srv = Service.objects.create(
+            name='Corte Teste',
+            price=Decimal('50.00'),
+            duration_minutes=30,
+        )
+        srv_url = reverse('admin-services-detail', args=[srv.id])
+        patch_resp = self.api.patch(
+            srv_url,
+            {'price': '60.00', 'promotion_price': '49.90'},
+            format='json',
+        )
+        self.assertEqual(patch_resp.status_code, 200)
+        self.assertEqual(patch_resp.data['effective_price'], '49.90')
+
+        prod = Product.objects.create(
+            name='Pomada Teste',
+            cost_price=Decimal('15.00'),
+            sale_price=Decimal('40.00'),
+            stock_quantity=5,
+        )
+        prod_url = reverse('admin-products-detail', args=[prod.id])
+        prod_resp = self.api.patch(
+            prod_url,
+            {'sale_price': '45.00', 'is_active': False},
+            format='json',
+        )
+        self.assertEqual(prod_resp.status_code, 200)
+        self.assertFalse(prod_resp.data['is_active'])
