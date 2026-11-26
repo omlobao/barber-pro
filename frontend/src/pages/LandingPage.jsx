@@ -252,27 +252,27 @@ export default function LandingPage() {
       <section
         id="inicio"
         ref={heroRef}
-        className="relative overflow-hidden border-b border-white/[0.07]"
+        className="relative isolate overflow-hidden border-b border-white/[0.07]"
       >
         {/* Imagem de Fundo com Prioridade LCP Alta e Vinheta Editorial */}
         <motion.div
           style={{ y: heroBgY }}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10"
+          className="pointer-events-none absolute inset-0 z-0"
         >
           <img
             src="/images/hero-noir.jpg"
             alt=""
             fetchPriority="high"
-            width="1600"
-            height="900"
-            className="h-full w-full object-cover object-[68%_center] opacity-80 sm:object-center"
+            width="1376"
+            height="768"
+            className="h-full w-full scale-105 object-cover object-[72%_center] opacity-95 sm:object-right"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0B0D10] via-[#0B0D10]/85 to-[#0B0D10]/25" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0D10] via-transparent to-[#0B0D10]/50" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0B0D10] via-[#0B0D10]/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0D10] via-transparent to-[#0B0D10]/35" />
         </motion.div>
 
-        <div className="mx-auto max-w-7xl px-4 pt-14 pb-10 sm:px-6 sm:pt-24 sm:pb-14 lg:px-8">
+        <div className="relative z-10 mx-auto max-w-7xl px-4 pt-14 pb-10 sm:px-6 sm:pt-24 sm:pb-14 lg:px-8">
           <div className="grid grid-cols-1 items-end gap-10 lg:grid-cols-12">
             {/* Coluna Esquerda: Título Serifado Bicolor */}
             <div className="lg:col-span-8">
@@ -993,20 +993,23 @@ export default function LandingPage() {
       </section>
 
       {/* 8. BANNER DE CONVERSÃO PRÉ-RODAPÉ */}
-      <section className="relative overflow-hidden border-y border-white/10 py-20 sm:py-24">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
+      <section className="relative isolate overflow-hidden border-y border-white/10 py-20 sm:py-24">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0"
+        >
           <img
             src="/images/lounge-banner.jpg"
             alt=""
             loading="lazy"
-            width="1600"
-            height="900"
-            className="h-full w-full object-cover opacity-35"
+            width="1376"
+            height="768"
+            className="h-full w-full object-cover opacity-50"
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0B0D10]/80 via-[#0B0D10]/65 to-[#0B0D10]/90" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0B0D10]/75 via-[#0B0D10]/55 to-[#0B0D10]/85" />
         </div>
 
-        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
+        <div className="relative z-10 mx-auto max-w-3xl px-4 text-center sm:px-6">
           <SectionTag>Benefício Exclusivo Online</SectionTag>
           <h2 className="font-display mt-4 text-3xl font-bold text-[#F8FAFC] sm:text-5xl">
             O Que Você Está Esperando?
